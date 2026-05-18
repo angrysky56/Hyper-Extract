@@ -288,12 +288,17 @@ def init(
     ),
 ):
     """Initialize configuration interactively."""
-    logger.info("command=config-init provider=%s api_key_provided=%s", provider, api_key is not None)
+    logger.info(
+        "command=config-init provider=%s api_key_provided=%s",
+        provider,
+        api_key is not None,
+    )
     config = ConfigManager()
 
     # Quick mode: provider + api_key provided
     if provider and api_key:
         from hyperextract.utils.client import PROVIDER_PRESETS
+
         preset = PROVIDER_PRESETS.get(provider, {})
         llm_model = preset.get("default_llm") or "gpt-4o-mini"
         emb_model = preset.get("default_embedder") or "text-embedding-3-small"
@@ -314,7 +319,11 @@ def init(
                 base_url=resolved_base,
             )
         else:
-            console.print("[yellow]Warning: Provider '{}' has no default embedder. Please configure embedder separately.[/yellow]".format(provider))
+            console.print(
+                "[yellow]Warning: Provider '{}' has no default embedder. Please configure embedder separately.[/yellow]".format(
+                    provider
+                )
+            )
 
         console.print("[bold green]Configuration saved successfully![/bold green]")
         console.print()
@@ -359,10 +368,10 @@ def init(
 
     console.print("[bold]Step 1: Choose Provider[/bold]")
     providers = [
-        ("openai",   "OpenAI",            "https://api.openai.com/v1"),
-        ("bailian",  "阿里云百炼",         "https://dashscope.aliyuncs.com/compatible-mode/v1"),
-        ("vllm",     "本地 vLLM",          "自定义地址"),
-        ("custom",   "其他 OpenAI 兼容接口", "自定义地址"),
+        ("openai", "OpenAI", "https://api.openai.com/v1"),
+        ("bailian", "阿里云百炼", "https://dashscope.aliyuncs.com/compatible-mode/v1"),
+        ("vllm", "本地 vLLM", "自定义地址"),
+        ("custom", "其他 OpenAI 兼容接口", "自定义地址"),
     ]
     for i, (key, name, url) in enumerate(providers, 1):
         console.print(f"  [{i}] {name:<20} ({url})")
@@ -382,11 +391,20 @@ def init(
     console.print(f"[bold]Step 2: LLM Configuration (Provider: {selected})[/bold]")
 
     if selected == "vllm":
-        llm_model = console.input(f"  LLM Model: ").strip()
-        llm_base_url = console.input(f"  LLM Base URL (e.g. http://localhost:8000/v1): ").strip()
+        llm_model = console.input("  LLM Model: ").strip()
+        llm_base_url = console.input(
+            "  LLM Base URL (e.g. http://localhost:8000/v1): "
+        ).strip()
     else:
-        llm_model = console.input(f"  Model (default: {default_llm}): ").strip() or default_llm
-        llm_base_url = console.input(f"  Base URL (default: {preset_url}, press Enter to skip): ").strip() or preset_url
+        llm_model = (
+            console.input(f"  Model (default: {default_llm}): ").strip() or default_llm
+        )
+        llm_base_url = (
+            console.input(
+                f"  Base URL (default: {preset_url}, press Enter to skip): "
+            ).strip()
+            or preset_url
+        )
 
     llm_api_key = None
     while not llm_api_key:
@@ -396,7 +414,9 @@ def init(
                 llm_api_key = "dummy"
                 console.print("  [dim]Using 'dummy' for vLLM[/dim]")
                 break
-            console.print("  [red]API Key is required. Please enter your API key.[/red]")
+            console.print(
+                "  [red]API Key is required. Please enter your API key.[/red]"
+            )
 
     config.set_llm(
         provider=selected,
@@ -411,10 +431,19 @@ def init(
 
     if selected == "vllm":
         emb_model = console.input("  Embedder Model (e.g. bge-m3): ").strip()
-        emb_base_url = console.input("  Embedder Base URL (e.g. http://localhost:8001/v1): ").strip()
+        emb_base_url = console.input(
+            "  Embedder Base URL (e.g. http://localhost:8001/v1): "
+        ).strip()
     else:
-        emb_model = console.input(f"  Model (default: {default_emb}): ").strip() or default_emb
-        emb_base_url = console.input(f"  Base URL (default: {preset_url}, press Enter to skip): ").strip() or preset_url
+        emb_model = (
+            console.input(f"  Model (default: {default_emb}): ").strip() or default_emb
+        )
+        emb_base_url = (
+            console.input(
+                f"  Base URL (default: {preset_url}, press Enter to skip): "
+            ).strip()
+            or preset_url
+        )
 
     emb_api_key = None
     while not emb_api_key:
@@ -424,7 +453,9 @@ def init(
                 emb_api_key = "dummy"
                 console.print("  [dim]Using 'dummy' for vLLM[/dim]")
                 break
-            console.print("  [red]API Key is required. Please enter your API key.[/red]")
+            console.print(
+                "  [red]API Key is required. Please enter your API key.[/red]"
+            )
 
     config.set_embedder(
         provider=selected,

@@ -42,7 +42,9 @@ def template(
     ),
 ):
     """List all available templates with detailed information."""
-    logger.info("command=list-template query=%s autotype=%s lang=%s", query, autotype, language)
+    logger.info(
+        "command=list-template query=%s autotype=%s lang=%s", query, autotype, language
+    )
     target_lang = language if language else "en"
 
     results = Gallery.list(

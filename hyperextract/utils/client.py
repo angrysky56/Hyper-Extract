@@ -78,6 +78,7 @@ class CompatibleEmbeddings(Embeddings):
 
         # Determine the tiktoken encoding to use for chunking
         import tiktoken
+
         try:
             self._encoding = tiktoken.encoding_for_model(model)
         except KeyError:
@@ -191,7 +192,11 @@ def _parse_client_spec(
             "model": spec.get("model", ""),
             "base_url": spec.get("base_url", ""),
             "api_key": spec.get("api_key") or api_key,
-            **{k: v for k, v in spec.items() if k not in ("provider", "model", "base_url", "api_key")},
+            **{
+                k: v
+                for k, v in spec.items()
+                if k not in ("provider", "model", "base_url", "api_key")
+            },
         }
 
     # Parse string shorthand: provider:model@url
@@ -361,13 +366,17 @@ def create_client(
         embedder = provider
 
     # Parse llm config
-    llm_config = _parse_client_spec(llm or provider, api_key=api_key, default_kind="llm")
+    llm_config = _parse_client_spec(
+        llm or provider, api_key=api_key, default_kind="llm"
+    )
     llm_config.update(kwargs)
 
     # Parse embedder config
     # For cloud providers, embedder defaults to llm's provider
     embedder_spec = embedder or llm_config.get("provider", "")
-    emb_config = _parse_client_spec(embedder_spec, api_key=api_key, default_kind="embedder")
+    emb_config = _parse_client_spec(
+        embedder_spec, api_key=api_key, default_kind="embedder"
+    )
 
     # Build clients
     llm_client = create_llm(llm_config, api_key=api_key)

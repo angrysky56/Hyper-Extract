@@ -237,7 +237,13 @@ def parse(
     ),
 ):
     """Extract knowledge from text to a new directory."""
-    logger.info("command=parse input=%s output=%s template=%s lang=%s", input, output, template or "auto", lang or "auto")
+    logger.info(
+        "command=parse input=%s output=%s template=%s lang=%s",
+        input,
+        output,
+        template or "auto",
+        lang or "auto",
+    )
     validate_config()
     logger.info("stage=config_validated")
 
@@ -605,7 +611,12 @@ def talk(
     ),
 ):
     """Chat with Knowledge Abstract."""
-    logger.info("command=talk ka_path=%s query=%s interactive=%s", ka_path, query or "loop", interactive)
+    logger.info(
+        "command=talk ka_path=%s query=%s interactive=%s",
+        ka_path,
+        query or "loop",
+        interactive,
+    )
     validate_config()
 
     path = validate_ka_with_index(ka_path)

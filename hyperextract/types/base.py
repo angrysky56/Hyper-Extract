@@ -247,7 +247,11 @@ class BaseAutoType(ABC, Generic[T]):
 
     def _extract_data(self, text: str) -> T:
         """Internal: Unified extraction logic (Chunking -> LLM -> Merge)."""
-        logger.debug("stage=extract_start input_chars=%d chunk_size=%d", len(text), self.chunk_size)
+        logger.debug(
+            "stage=extract_start input_chars=%d chunk_size=%d",
+            len(text),
+            self.chunk_size,
+        )
 
         if len(text) <= self.chunk_size:
             logger.debug("stage=extract_single_chunk chunk_text_preview=%s", text[:200])
@@ -263,23 +267,35 @@ class BaseAutoType(ABC, Generic[T]):
             for i, chunk in enumerate(chunks):
                 logger.debug(
                     "stage=chunk_before_llm chunk_index=%d chunk_chars=%d chunk_text_preview=%s",
-                    i, len(chunk), chunk[:200],
+                    i,
+                    len(chunk),
+                    chunk[:200],
                 )
             inputs = [{"source_text": chunk} for chunk in chunks]
-            logger.debug("stage=llm_batch_start max_concurrency=%d num_inputs=%d", self.max_workers, len(inputs))
+            logger.debug(
+                "stage=llm_batch_start max_concurrency=%d num_inputs=%d",
+                self.max_workers,
+                len(inputs),
+            )
             extracted_data_list = self.data_extractor.batch(
                 inputs, config={"max_concurrency": self.max_workers}
             )
-            logger.debug("stage=llm_batch_complete results=%d", len(extracted_data_list))
+            logger.debug(
+                "stage=llm_batch_complete results=%d", len(extracted_data_list)
+            )
             for i, result in enumerate(extracted_data_list):
                 logger.debug(
                     "stage=chunk_llm_result chunk_index=%d result_summary=%s",
-                    i, self._summarize_extracted(result),
+                    i,
+                    self._summarize_extracted(result),
                 )
 
         logger.debug("stage=merge_start num_items=%d", len(extracted_data_list))
         merged_data = self.merge_batch_data(extracted_data_list)
-        logger.debug("stage=extract_complete merged_summary=%s", self._summarize_extracted(merged_data))
+        logger.debug(
+            "stage=extract_complete merged_summary=%s",
+            self._summarize_extracted(merged_data),
+        )
         return merged_data
 
     def _summarize_extracted(self, data: T) -> str:
