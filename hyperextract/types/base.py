@@ -290,6 +290,9 @@ class BaseAutoType(ABC, Generic[T]):
                     self._summarize_extracted(result),
                 )
 
+        # Filter out None results from failed LLM extractions
+        extracted_data_list = self._filter_none_results(extracted_data_list)
+
         logger.debug("stage=merge_start num_items=%d", len(extracted_data_list))
         merged_data = self.merge_batch_data(extracted_data_list)
         logger.debug(
@@ -297,6 +300,36 @@ class BaseAutoType(ABC, Generic[T]):
             self._summarize_extracted(merged_data),
         )
         return merged_data
+
+    def _filter_none_results(self, results: list, default_factory=None) -> list:
+        """Replace None results from batch LLM extractions with empty defaults.
+
+        When the LLM fails to parse output (e.g., context length exceeded,
+        json_schema validation failure), batch() returns None for that item.
+        This method replaces None with empty objects to maintain index alignment
+        with the original chunks list.
+
+        Args:
+            results: List of extraction results, may contain None values.
+            default_factory: Callable that creates a default empty object.
+                If None, None values are simply removed (legacy behavior).
+
+        Returns:
+            List with None values replaced or removed.
+        """
+        if not results:
+            return results
+        none_count = sum(1 for r in results if r is None)
+        if none_count > 0:
+            logger.warning(
+                "stage=batch_filter none_results_detected none_count=%d total=%d",
+                none_count,
+                len(results),
+            )
+            if default_factory is not None:
+                return [r if r is not None else default_factory() for r in results]
+            return [r for r in results if r is not None]
+        return results
 
     def _summarize_extracted(self, data: T) -> str:
         """Return a concise summary of extracted data for debug logging."""
