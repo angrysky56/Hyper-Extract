@@ -492,6 +492,10 @@ class AutoGraph(
             graph_list = self.data_extractor.batch(
                 inputs, config={"max_concurrency": self.max_workers}
             )
+            graph_list = self._filter_none_results(
+                graph_list,
+                default_factory=lambda: self.graph_schema(nodes=[], edges=[]),
+            )
             logger.debug("stage=one_stage_batch_complete graphs=%d", len(graph_list))
 
         logger.debug("stage=one_stage_merge_start")
@@ -578,8 +582,12 @@ class AutoGraph(
             List of NodeListSchema objects with extracted nodes.
         """
         inputs = [{"source_text": chunk} for chunk in chunks]
-        return self.node_extractor.batch(
+        results = self.node_extractor.batch(
             inputs, config={"max_concurrency": self.max_workers}
+        )
+        return self._filter_none_results(
+            results,
+            default_factory=lambda: self.node_list_schema(items=[]),
         )
 
     def _extract_edges_batch(
@@ -605,8 +613,12 @@ class AutoGraph(
 
             inputs.append({"source_text": chunk, "known_nodes": known_nodes})
 
-        return self.edge_extractor.batch(
+        results = self.edge_extractor.batch(
             inputs, config={"max_concurrency": self.max_workers}
+        )
+        return self._filter_none_results(
+            results,
+            default_factory=lambda: self.edge_list_schema(items=[]),
         )
 
     def _prune_dangling_edges(
@@ -672,6 +684,11 @@ class AutoGraph(
         Returns:
             Merged graph.
         """
+        # Handle empty input (all batch results were None/filtered out)
+        if not data_list_or_tuple:
+            logger.warning("stage=merge_batch_empty input_is_empty")
+            return self.graph_schema(nodes=[], edges=[])
+
         logger.debug(
             "stage=merge_batch_start input_type=%s",
             "tuple"
@@ -691,12 +708,20 @@ class AutoGraph(
                 "Invalid input format for batch merging"
             )
             nodes_lists, edges_lists = data_list_or_tuple[0], data_list_or_tuple[1]
-            assert isinstance(nodes_lists[0][0], self.node_schema), (
-                "Invalid node list format for batch merging"
-            )
-            assert isinstance(edges_lists[0][0], self.edge_schema), (
-                "Invalid edge list format for batch merging"
-            )
+
+            # Handle empty nodes/edges lists
+            if not nodes_lists and not edges_lists:
+                logger.warning("stage=merge_batch_empty_tuple nodes_and_edges_empty")
+                return self.graph_schema(nodes=[], edges=[])
+
+            if nodes_lists:
+                assert isinstance(nodes_lists[0][0], self.node_schema), (
+                    "Invalid node list format for batch merging"
+                )
+            if edges_lists:
+                assert isinstance(edges_lists[0][0], self.edge_schema), (
+                    "Invalid edge list format for batch merging"
+                )
 
             all_nodes, all_edges = [], []
             for node_list, edge_list in zip(nodes_lists, edges_lists):

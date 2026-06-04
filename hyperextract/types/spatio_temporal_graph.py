@@ -286,8 +286,12 @@ class AutoSpatioTemporalGraph(AutoGraph[NodeSchema, EdgeSchema]):
                 }
             )
 
-        return self.edge_extractor.batch(
+        results = self.edge_extractor.batch(
             inputs, config={"max_concurrency": self.max_workers}
+        )
+        return self._filter_none_results(
+            results,
+            default_factory=lambda: self.edge_list_schema(items=[]),
         )
 
     def _extract_data_by_one_stage(self, text: str) -> Any:
@@ -313,6 +317,10 @@ class AutoSpatioTemporalGraph(AutoGraph[NodeSchema, EdgeSchema]):
             ]
             graph_list = self.data_extractor.batch(
                 inputs, config={"max_concurrency": self.max_workers}
+            )
+            graph_list = self._filter_none_results(
+                graph_list,
+                default_factory=lambda: self.graph_schema(nodes=[], edges=[]),
             )
 
         return self.merge_batch_data(graph_list)
