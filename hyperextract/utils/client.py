@@ -11,8 +11,8 @@ String shorthand format: provider:model@url
     - "vllm:Qwen3.5-9B@http://localhost:8000/v1" → full specification
 """
 
-import os
 import logging
+import os
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -160,7 +160,7 @@ class CompatibleEmbeddings(Embeddings):
                 input=[text for text, _ in b],
                 model=self._model,
             )
-            for (text, orig_idx), emb_data in zip(b, response.data, strict=False):
+            for (_, orig_idx), emb_data in zip(b, response.data, strict=False):
                 emb = emb_data.embedding
                 if orig_idx not in sums:
                     sums[orig_idx] = list(emb)
