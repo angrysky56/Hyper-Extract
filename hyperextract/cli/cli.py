@@ -814,3 +814,30 @@ def build_index(
     console.print("[dim]Now you can:[/dim]")
     console.print(f'[dim]  he search {ka_path} "keyword"  # Semantic search[/dim]')
     console.print(f"[dim]  he talk {ka_path} -i           # Interactive chat[/dim]")
+
+
+@app.command(name="ui")
+def ui(
+    port: int = typer.Option(
+        8000,
+        "--port",
+        "-p",
+        help="Port to run the UI server on",
+    ),
+    host: str = typer.Option(
+        "127.0.0.1",
+        "--host",
+        "-h",
+        help="Host to bind the UI server to",
+    ),
+    open_browser: bool = typer.Option(
+        True,
+        "--open/--no-open",
+        help="Open UI in default web browser automatically",
+    ),
+):
+    """Start the Hyper-Extract Web UI (FastAPI backend + React frontend)."""
+    from .commands.ui import start_ui_server
+
+    start_ui_server(port=port, host=host, open_browser=open_browser)
+

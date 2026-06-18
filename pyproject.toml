@@ -41,6 +41,10 @@ dependencies = [
     "typer>=0.13.0",
     "rich>=13.7.0",
     "tomli-w>=1.0.0",
+    # Web UI dependencies
+    "fastapi>=0.110.0",
+    "uvicorn>=0.28.0",
+    "python-multipart>=0.0.9",
 ]
 
 [dependency-groups]
