@@ -1,13 +1,15 @@
 """Config command for Hyper-Extract CLI."""
 
 from typing import Optional
+
+import typer
 from rich.console import Console
 from rich.table import Table
 from rich.text import Text
 
-from ..config import ConfigManager
 from hyperextract.utils.logging import get_logger
-import typer
+
+from ..config import ConfigManager
 
 logger = get_logger("he.config")
 console = Console()
@@ -134,9 +136,7 @@ def _show_config():
 
 
 @app.command(name="show")
-def show(
-    show_all: bool = typer.Option(False, "--show", help="Show all configuration"),
-):
+def show():
     """Show current configuration."""
     logger.info("command=config-show")
     _show_config()
@@ -168,14 +168,14 @@ def llm(
         "-u",
         help="Custom API base URL",
     ),
-    show: bool = typer.Option(False, "--show", help="Show current LLM configuration"),
+    show_cfg: bool = typer.Option(False, "--show", help="Show current LLM configuration"),
     unset: bool = typer.Option(False, "--unset", help="Unset LLM configuration"),
 ):
     """Configure LLM settings."""
-    logger.info("command=config-llm show=%s unset=%s", show, unset)
+    logger.info("command=config-llm show=%s unset=%s", show_cfg, unset)
     config = ConfigManager()
 
-    if show:
+    if show_cfg:
         cfg = config.get_llm_config()
         table = Table(title="LLM Configuration", show_header=False)
         table.add_column("Key", style="cyan")
@@ -229,16 +229,16 @@ def embedder(
         "-u",
         help="Custom API base URL",
     ),
-    show: bool = typer.Option(
+    show_cfg: bool = typer.Option(
         False, "--show", help="Show current Embedder configuration"
     ),
     unset: bool = typer.Option(False, "--unset", help="Unset Embedder configuration"),
 ):
     """Configure Embedder settings."""
-    logger.info("command=config-embedder show=%s unset=%s", show, unset)
+    logger.info("command=config-embedder show=%s unset=%s", show_cfg, unset)
     config = ConfigManager()
 
-    if show:
+    if show_cfg:
         cfg = config.get_embedder_config()
         table = Table(title="Embedder Configuration", show_header=False)
         table.add_column("Key", style="cyan")
@@ -320,9 +320,8 @@ def init(
             )
         else:
             console.print(
-                "[yellow]Warning: Provider '{}' has no default embedder. Please configure embedder separately.[/yellow]".format(
-                    provider
-                )
+                f"[yellow]Warning: Provider '{provider}' has no default embedder. "
+                "Please configure embedder separately.[/yellow]"
             )
 
         console.print("[bold green]Configuration saved successfully![/bold green]")
@@ -377,7 +376,7 @@ def init(
         ("lmstudio", "LM Studio", "http://localhost:1234/v1"),
         ("custom", "其他 OpenAI 兼容接口", "自定义地址"),
     ]
-    for i, (key, name, url) in enumerate(providers, 1):
+    for i, (_, name, url) in enumerate(providers, 1):
         console.print(f"  [{i}] {name:<20} ({url})")
 
     choice = console.input(f"\n请选择 [1-{len(providers)}]: ").strip()
@@ -397,10 +396,15 @@ def init(
     console.print(f"[bold]Step 2: LLM Configuration (Provider: {selected})[/bold]")
 
     if selected in local_providers:
-        llm_model = console.input(f"  LLM Model (default: {default_llm or ''}): ").strip() or (default_llm or "")
-        llm_base_url = console.input(
-            f"  LLM Base URL (default: {preset_url or 'http://localhost:8000/v1'}, press Enter to use default): "
-        ).strip() or preset_url
+        llm_model = console.input(
+            f"  LLM Model (default: {default_llm or ''}): "
+        ).strip() or (default_llm or "")
+        llm_base_url = (
+            console.input(
+                f"  LLM Base URL (default: {preset_url or 'http://localhost:8000/v1'}, press Enter to use default): "
+            ).strip()
+            or preset_url
+        )
     else:
         llm_model = (
             console.input(f"  Model (default: {default_llm}): ").strip() or default_llm
@@ -436,10 +440,15 @@ def init(
     console.print("[bold]Step 3: Embedder Configuration[/bold]")
 
     if selected in local_providers:
-        emb_model = console.input(f"  Embedder Model (default: {default_emb or ''}): ").strip() or (default_emb or "")
-        emb_base_url = console.input(
-            f"  Embedder Base URL (default: {preset_url or 'http://localhost:8001/v1'}, press Enter to use default): "
-        ).strip() or preset_url
+        emb_model = console.input(
+            f"  Embedder Model (default: {default_emb or ''}): "
+        ).strip() or (default_emb or "")
+        emb_base_url = (
+            console.input(
+                f"  Embedder Base URL (default: {preset_url or 'http://localhost:8001/v1'}, press Enter to use default): "
+            ).strip()
+            or preset_url
+        )
     else:
         emb_model = (
             console.input(f"  Model (default: {default_emb}): ").strip() or default_emb
