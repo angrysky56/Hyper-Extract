@@ -370,13 +370,17 @@ def init(
     providers = [
         ("openai", "OpenAI", "https://api.openai.com/v1"),
         ("bailian", "阿里云百炼", "https://dashscope.aliyuncs.com/compatible-mode/v1"),
+        ("openrouter", "OpenRouter", "https://openrouter.ai/api/v1"),
+        ("nvidia", "Nvidia NIM", "https://integrate.api.nvidia.com/v1"),
         ("vllm", "本地 vLLM", "自定义地址"),
+        ("ollama", "本地 Ollama", "http://localhost:11434/v1"),
+        ("lmstudio", "LM Studio", "http://localhost:1234/v1"),
         ("custom", "其他 OpenAI 兼容接口", "自定义地址"),
     ]
     for i, (key, name, url) in enumerate(providers, 1):
         console.print(f"  [{i}] {name:<20} ({url})")
 
-    choice = console.input("\n请选择 [1-4]: ").strip()
+    choice = console.input(f"\n请选择 [1-{len(providers)}]: ").strip()
     try:
         selected = providers[int(choice) - 1][0] if choice.isdigit() else "openai"
     except (IndexError, ValueError):
@@ -387,14 +391,16 @@ def init(
     default_llm = preset.get("default_llm") or "gpt-4o-mini"
     default_emb = preset.get("default_embedder") or "text-embedding-3-small"
 
+    local_providers = {"vllm", "ollama", "lmstudio"}
+
     console.print()
     console.print(f"[bold]Step 2: LLM Configuration (Provider: {selected})[/bold]")
 
-    if selected == "vllm":
-        llm_model = console.input("  LLM Model: ").strip()
+    if selected in local_providers:
+        llm_model = console.input(f"  LLM Model (default: {default_llm or ''}): ").strip() or (default_llm or "")
         llm_base_url = console.input(
-            "  LLM Base URL (e.g. http://localhost:8000/v1): "
-        ).strip()
+            f"  LLM Base URL (default: {preset_url or 'http://localhost:8000/v1'}, press Enter to use default): "
+        ).strip() or preset_url
     else:
         llm_model = (
             console.input(f"  Model (default: {default_llm}): ").strip() or default_llm
@@ -410,9 +416,9 @@ def init(
     while not llm_api_key:
         llm_api_key = console.input("  API Key: ").strip()
         if not llm_api_key:
-            if selected == "vllm":
+            if selected in local_providers:
                 llm_api_key = "dummy"
-                console.print("  [dim]Using 'dummy' for vLLM[/dim]")
+                console.print(f"  [dim]Using 'dummy' for {selected}[/dim]")
                 break
             console.print(
                 "  [red]API Key is required. Please enter your API key.[/red]"
@@ -429,11 +435,11 @@ def init(
 
     console.print("[bold]Step 3: Embedder Configuration[/bold]")
 
-    if selected == "vllm":
-        emb_model = console.input("  Embedder Model (e.g. bge-m3): ").strip()
+    if selected in local_providers:
+        emb_model = console.input(f"  Embedder Model (default: {default_emb or ''}): ").strip() or (default_emb or "")
         emb_base_url = console.input(
-            "  Embedder Base URL (e.g. http://localhost:8001/v1): "
-        ).strip()
+            f"  Embedder Base URL (default: {preset_url or 'http://localhost:8001/v1'}, press Enter to use default): "
+        ).strip() or preset_url
     else:
         emb_model = (
             console.input(f"  Model (default: {default_emb}): ").strip() or default_emb
@@ -449,9 +455,9 @@ def init(
     while not emb_api_key:
         emb_api_key = console.input("  API Key: ").strip()
         if not emb_api_key:
-            if selected == "vllm":
+            if selected in local_providers:
                 emb_api_key = "dummy"
-                console.print("  [dim]Using 'dummy' for vLLM[/dim]")
+                console.print(f"  [dim]Using 'dummy' for {selected}[/dim]")
                 break
             console.print(
                 "  [red]API Key is required. Please enter your API key.[/red]"

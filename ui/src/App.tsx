@@ -820,7 +820,11 @@ export default function App() {
                       >
                         <option value="openai">OpenAI</option>
                         <option value="bailian">Aliyun Bailian</option>
+                        <option value="openrouter">OpenRouter</option>
+                        <option value="nvidia">Nvidia NIM</option>
                         <option value="vllm">Local vLLM</option>
+                        <option value="ollama">Local Ollama</option>
+                        <option value="lmstudio">LM Studio</option>
                         <option value="custom">Custom Endpoint</option>
                       </select>
                     </div>
@@ -872,7 +876,11 @@ export default function App() {
                       >
                         <option value="openai">OpenAI</option>
                         <option value="bailian">Aliyun Bailian</option>
+                        <option value="openrouter">OpenRouter</option>
+                        <option value="nvidia">Nvidia NIM</option>
                         <option value="vllm">Local vLLM</option>
+                        <option value="ollama">Local Ollama</option>
+                        <option value="lmstudio">LM Studio</option>
                         <option value="custom">Custom Endpoint</option>
                       </select>
                     </div>

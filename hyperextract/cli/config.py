@@ -29,6 +29,26 @@ PROVIDER_PRESETS: Dict[str, Dict[str, str | None]] = {
         "default_llm": None,
         "default_embedder": None,
     },
+    "openrouter": {
+        "base_url": "https://openrouter.ai/api/v1",
+        "default_llm": "meta-llama/llama-3-8b-instruct:free",
+        "default_embedder": None,
+    },
+    "nvidia": {
+        "base_url": "https://integrate.api.nvidia.com/v1",
+        "default_llm": "meta/llama-3.1-8b-instruct",
+        "default_embedder": "nvidia/embeddings-nv-embed-qa-4",
+    },
+    "ollama": {
+        "base_url": "http://localhost:11434/v1",
+        "default_llm": "llama3",
+        "default_embedder": "nomic-embed-text",
+    },
+    "lmstudio": {
+        "base_url": "http://localhost:1234/v1",
+        "default_llm": None,
+        "default_embedder": None,
+    },
 }
 
 
@@ -132,12 +152,16 @@ class ConfigManager:
 
     def get_llm_config(self) -> LLMConfig:
         """Get LLM config with environment variable fallback."""
+        provider = self.llm.provider
+        api_key = self.llm.api_key or os.environ.get("OPENAI_API_KEY", "")
+        if not api_key and provider in {"vllm", "ollama", "lmstudio"}:
+            api_key = "local"
         config = LLMConfig(
-            provider=self.llm.provider,
+            provider=provider,
             model=self.llm.model,
-            api_key=self.llm.api_key or os.environ.get("OPENAI_API_KEY", ""),
+            api_key=api_key,
             base_url=self._resolve_base_url(
-                self.llm.provider,
+                provider,
                 self.llm.base_url or os.environ.get("OPENAI_BASE_URL", ""),
             ),
         )
@@ -145,12 +169,16 @@ class ConfigManager:
 
     def get_embedder_config(self) -> EmbedderConfig:
         """Get Embedder config with environment variable fallback."""
+        provider = self.embedder.provider
+        api_key = self.embedder.api_key or os.environ.get("OPENAI_API_KEY", "")
+        if not api_key and provider in {"vllm", "ollama", "lmstudio"}:
+            api_key = "local"
         config = EmbedderConfig(
-            provider=self.embedder.provider,
+            provider=provider,
             model=self.embedder.model,
-            api_key=self.embedder.api_key or os.environ.get("OPENAI_API_KEY", ""),
+            api_key=api_key,
             base_url=self._resolve_base_url(
-                self.embedder.provider,
+                provider,
                 self.embedder.base_url or os.environ.get("OPENAI_BASE_URL", ""),
             ),
         )
@@ -165,7 +193,12 @@ class ConfigManager:
     ) -> None:
         """Set LLM configuration."""
         if provider is not None:
+            old_provider = self.llm.provider
             self.llm.provider = provider
+            if provider != old_provider:
+                preset = PROVIDER_PRESETS.get(provider, {})
+                self.llm.model = preset.get("default_llm") or ""
+                self.llm.base_url = preset.get("base_url") or ""
         if model:
             self.llm.model = model
         if api_key is not None:
@@ -183,7 +216,12 @@ class ConfigManager:
     ) -> None:
         """Set Embedder configuration."""
         if provider is not None:
+            old_provider = self.embedder.provider
             self.embedder.provider = provider
+            if provider != old_provider:
+                preset = PROVIDER_PRESETS.get(provider, {})
+                self.embedder.model = preset.get("default_embedder") or ""
+                self.embedder.base_url = preset.get("base_url") or ""
         if model:
             self.embedder.model = model
         if api_key is not None:
@@ -214,19 +252,20 @@ class ConfigManager:
         llm_config = self.get_llm_config()
         embedder_config = self.get_embedder_config()
 
-        # vLLM mode: api_key can be empty or dummy, but base_url is required
-        if llm_config.provider == "vllm":
+        local_providers = {"vllm", "ollama", "lmstudio"}
+
+        if llm_config.provider in local_providers:
             if not llm_config.base_url:
-                return False, "vLLM provider requires base_url."
+                return False, f"{llm_config.provider} provider requires base_url."
         elif not llm_config.api_key:
             return (
                 False,
                 "LLM API key is not configured. Run 'he config llm --api-key YOUR_KEY'",
             )
 
-        if embedder_config.provider == "vllm":
+        if embedder_config.provider in local_providers:
             if not embedder_config.base_url:
-                return False, "vLLM embedder requires base_url."
+                return False, f"{embedder_config.provider} embedder requires base_url."
         elif not embedder_config.api_key:
             return (
                 False,

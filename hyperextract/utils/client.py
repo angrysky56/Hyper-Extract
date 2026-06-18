@@ -44,6 +44,26 @@ PROVIDER_PRESETS: Dict[str, Dict[str, str | None]] = {
         "default_llm": None,
         "default_embedder": None,
     },
+    "openrouter": {
+        "base_url": "https://openrouter.ai/api/v1",
+        "default_llm": "meta-llama/llama-3-8b-instruct:free",
+        "default_embedder": None,
+    },
+    "nvidia": {
+        "base_url": "https://integrate.api.nvidia.com/v1",
+        "default_llm": "meta/llama-3.1-8b-instruct",
+        "default_embedder": "nvidia/embeddings-nv-embed-qa-4",
+    },
+    "ollama": {
+        "base_url": "http://localhost:11434/v1",
+        "default_llm": "llama3",
+        "default_embedder": "nomic-embed-text",
+    },
+    "lmstudio": {
+        "base_url": "http://localhost:1234/v1",
+        "default_llm": None,
+        "default_embedder": None,
+    },
 }
 
 
