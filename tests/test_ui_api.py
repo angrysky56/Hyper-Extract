@@ -2,6 +2,7 @@
 
 import pytest
 from fastapi.testclient import TestClient
+
 from hyperextract.ui.server import app
 
 client = TestClient(app)

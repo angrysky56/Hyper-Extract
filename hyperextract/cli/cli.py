@@ -5,28 +5,27 @@ from typing import Optional
 
 import typer
 from rich.console import Console
-from rich.table import Table
-from rich.text import Text
 from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich.prompt import Prompt
+from rich.table import Table
+from rich.text import Text
 
-from hyperextract.utils.template_engine import Gallery, Template
 from hyperextract.utils.logging import configure_logging, get_logger
+from hyperextract.utils.template_engine import Gallery, Template
 
+from .commands import config_app, list_app
+from .config import (
+    load_ka_metadata,
+)
 from .utils import (
     LOGO,
+    get_template_from_ka,
     read_input,
     validate_config,
     validate_ka_path,
     validate_ka_with_data,
     validate_ka_with_index,
-    get_template_from_ka,
 )
-from .config import (
-    load_ka_metadata,
-)
-
-from .commands import list_app, config_app
 
 console = Console()
 logger = get_logger("he")
@@ -840,4 +839,3 @@ def ui(
     from .commands.ui import start_ui_server
 
     start_ui_server(port=port, host=host, open_browser=open_browser)
-

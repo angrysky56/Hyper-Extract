@@ -1,15 +1,15 @@
 """FastAPI backend server for Hyper-Extract Web UI."""
 
-import os
 import json
-import uuid
 import logging
+import os
 import threading
+import uuid
 from datetime import datetime
 from pathlib import Path
-from typing import List, Dict, Any, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
-from fastapi import FastAPI, BackgroundTasks, HTTPException, Query
+from fastapi import BackgroundTasks, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -271,9 +271,11 @@ def list_knowledge_abstracts():
                     {
                         "path": path_str,
                         "name": path.name,
-                        "template": metadata.get("template", "unknown")
-                        if metadata
-                        else "unknown",
+                        "template": (
+                            metadata.get("template", "unknown")
+                            if metadata
+                            else "unknown"
+                        ),
                         "lang": metadata.get("lang", "en") if metadata else "en",
                         "node_count": node_count,
                         "edge_count": edge_count,
@@ -414,7 +416,9 @@ def run_async_extraction(
         # Step 4: Build Search Index
         if not no_index:
             task["progress"] = "Building vector search index..."
-            task["logs"].append("[4/4] Generating vector embeddings for search index...")
+            task["logs"].append(
+                "[4/4] Generating vector embeddings for search index..."
+            )
             ka.build_index()
             ka.dump(out_dir)
             task["logs"].append("Vector search index saved successfully.")
