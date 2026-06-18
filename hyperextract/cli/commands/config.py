@@ -168,7 +168,9 @@ def llm(
         "-u",
         help="Custom API base URL",
     ),
-    show_cfg: bool = typer.Option(False, "--show", help="Show current LLM configuration"),
+    show_cfg: bool = typer.Option(
+        False, "--show", help="Show current LLM configuration"
+    ),
     unset: bool = typer.Option(False, "--unset", help="Unset LLM configuration"),
 ):
     """Configure LLM settings."""
