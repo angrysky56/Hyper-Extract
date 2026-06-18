@@ -2,14 +2,13 @@
 
 import json
 import logging
-import os
 import threading
 import uuid
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
-from fastapi import BackgroundTasks, FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -48,8 +47,8 @@ def load_history() -> List[str]:
     try:
         with open(HISTORY_FILE, "r", encoding="utf-8") as f:
             return json.load(f)
-    except Exception as e:
-        logger.error(f"Failed to load history: {e}")
+    except Exception as e:  # noqa: BLE001  # pylint: disable=broad-except
+        logger.error("Failed to load history: %s", e)
         return []
 
 
@@ -61,8 +60,8 @@ def save_history(paths: List[str]) -> None:
         unique_paths = list(dict.fromkeys([str(Path(p).resolve()) for p in paths]))
         with open(HISTORY_FILE, "w", encoding="utf-8") as f:
             json.dump(unique_paths, f, indent=2, ensure_ascii=False)
-    except Exception as e:
-        logger.error(f"Failed to save history: {e}")
+    except Exception as e:  # noqa: BLE001  # pylint: disable=broad-except
+        logger.error("Failed to save history: %s", e)
 
 
 # In-memory Task State Registry
@@ -129,7 +128,7 @@ def get_config():
         config = ConfigManager()
         return config.show()
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @app.post("/api/config/llm")
@@ -145,7 +144,7 @@ def update_llm_config(data: LLMConfigUpdate):
         )
         return {"status": "success", "config": config.show()["llm"]}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @app.post("/api/config/embedder")
@@ -161,7 +160,7 @@ def update_embedder_config(data: EmbedderConfigUpdate):
         )
         return {"status": "success", "config": config.show()["embedder"]}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 # ==================== Templates APIs ====================
@@ -208,7 +207,7 @@ def get_templates(language: Optional[str] = None):
             )
         return templates_list
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 # ==================== Knowledge Abstract APIs ====================
@@ -284,8 +283,8 @@ def list_knowledge_abstracts():
                         "updated_at": updated_at,
                     }
                 )
-            except Exception as e:
-                logger.warning(f"Error loading KA details at {path_str}: {e}")
+            except Exception as e:  # noqa: BLE001  # pylint: disable=broad-except
+                logger.warning("Error loading KA details at %s: %s", path_str, e)
 
     # Keep history file sync'd with valid paths
     save_history(valid_history_paths)
@@ -360,7 +359,7 @@ def get_ka_data(path: str = Query(..., description="Absolute path of KA")):
             "has_index": has_index,
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 # ==================== Async Task Execution Runner ====================
@@ -377,7 +376,11 @@ def run_async_extraction(
     """Task runner running in background thread to parse document."""
     task = tasks_registry[task_id]
     logger.info(
-        f"Starting task={task_id} output={output_path} template={template} lang={lang}"
+        "Starting task=%s output=%s template=%s lang=%s",
+        task_id,
+        output_path,
+        template,
+        lang,
     )
 
     try:
@@ -438,8 +441,8 @@ def run_async_extraction(
             history.append(path_str)
             save_history(history)
 
-    except Exception as e:
-        logger.error(f"Task {task_id} failed: {e}", exc_info=True)
+    except Exception as e:  # noqa: BLE001  # pylint: disable=broad-except
+        logger.error("Task %s failed: %s", task_id, e, exc_info=True)
         task["status"] = "failed"
         task["progress"] = f"Failed: {str(e)}"
         task["completed_at"] = datetime.now().isoformat()
@@ -480,8 +483,8 @@ def run_async_feed(task_id: str, path_str: str, input_text: str) -> None:
         task["completed_at"] = datetime.now().isoformat()
         task["logs"].append("Append task finished successfully!")
 
-    except Exception as e:
-        logger.error(f"Feed task {task_id} failed: {e}", exc_info=True)
+    except Exception as e:  # noqa: BLE001  # pylint: disable=broad-except
+        logger.error("Feed task %s failed: %s", task_id, e, exc_info=True)
         task["status"] = "failed"
         task["progress"] = f"Failed: {str(e)}"
         task["completed_at"] = datetime.now().isoformat()
@@ -517,8 +520,8 @@ def run_async_build_index(task_id: str, path_str: str, force: bool) -> None:
         task["completed_at"] = datetime.now().isoformat()
         task["logs"].append("Index build task completed!")
 
-    except Exception as e:
-        logger.error(f"Build index task {task_id} failed: {e}", exc_info=True)
+    except Exception as e:  # noqa: BLE001  # pylint: disable=broad-except
+        logger.error("Build index task %s failed: %s", task_id, e, exc_info=True)
         task["status"] = "failed"
         task["progress"] = f"Failed: {str(e)}"
         task["completed_at"] = datetime.now().isoformat()
@@ -680,7 +683,7 @@ def search_ka(req: SearchRequest):
 
         return {"results": serialized_results}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @app.post("/api/ka/talk")
@@ -727,7 +730,7 @@ def talk_ka(req: TalkRequest):
             "retrieved_items": serialized_items,
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 # ==================== Static Files Mount ====================
@@ -739,6 +742,7 @@ if dist_path.exists() and dist_path.is_dir():
     app.mount("/", StaticFiles(directory=str(dist_path), html=True), name="static")
 else:
     logger.warning(
-        f"Static files directory {dist_path} not found. Running API-only mode. "
-        "Compile the frontend assets using npm build to enable Web UI."
+        "Static files directory %s not found. Running API-only mode. "
+        "Compile the frontend assets using npm build to enable Web UI.",
+        dist_path,
     )

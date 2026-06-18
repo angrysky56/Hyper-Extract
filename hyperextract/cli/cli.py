@@ -205,7 +205,7 @@ def select_template_interactive() -> Optional[str]:
                 return matches[0][1]
             elif len(matches) > 1:
                 console.print(f"[yellow]Found {len(matches)} matches:[/yellow]")
-                for i, path, cfg in matches:
+                for i, path, _ in matches:
                     console.print(f"  [{i + 1}] {path}")
                 continue
             else:
@@ -214,7 +214,7 @@ def select_template_interactive() -> Optional[str]:
 
 @app.command(name="parse")
 def parse(
-    input: str = typer.Argument(
+    input_path: str = typer.Argument(
         ..., help="Input file path, directory, or '-' for stdin"
     ),
     output: str = typer.Option(..., "--output", "-o", help="Output directory"),
@@ -238,7 +238,7 @@ def parse(
     """Extract knowledge from text to a new directory."""
     logger.info(
         "command=parse input=%s output=%s template=%s lang=%s",
-        input,
+        input_path,
         output,
         template or "auto",
         lang or "auto",
@@ -279,7 +279,7 @@ def parse(
 
     output_path.mkdir(parents=True, exist_ok=True)
 
-    console.print(f"[blue]Input:[/blue] {input}")
+    console.print(f"[blue]Input:[/blue] {input_path}")
     console.print(f"[blue]Output:[/blue] {output}")
     console.print(f"[blue]Template:[/blue] {template}")
     console.print(f"[blue]Language:[/blue] {lang}")
@@ -294,9 +294,9 @@ def parse(
         logger.info("stage=template_resolved template=%s", template_config.name)
     except ValueError as e:
         console.print(f"[red]Error:[/red] {e}")
-        raise typer.Exit(1)
+        raise typer.Exit(1) from e
 
-    input_path = Path(input)
+    in_path = Path(input_path)
 
     with Progress(
         SpinnerColumn(),
@@ -308,12 +308,12 @@ def parse(
         ka = Template.create(template, lang)
         logger.info("stage=template_created")
 
-        if input_path.is_dir():
+        if in_path.is_dir():
             progress.update(task, description="Processing directory...")
-            text_files = list(input_path.glob("*.txt")) + list(input_path.glob("*.md"))
+            text_files = list(in_path.glob("*.txt")) + list(in_path.glob("*.md"))
             if not text_files:
                 console.print(
-                    f"[red]Error:[/red] No .txt or .md files found in {input}"
+                    f"[red]Error:[/red] No .txt or .md files found in {input_path}"
                 )
                 raise typer.Exit(1)
 
@@ -332,7 +332,7 @@ def parse(
             logger.info("stage=knowledge_extracted chars=%d", len(combined_text))
         else:
             progress.update(task, description="Reading input...")
-            text = read_input(input)
+            text = read_input(input_path)
             console.print(f"[dim]Input text: {len(text)} characters[/dim]")
 
             progress.update(task, description="Extracting knowledge...")
@@ -418,7 +418,7 @@ def show(ka_path: str = typer.Argument(..., help="Knowledge Abstract directory")
 
         except Exception as e:
             console.print(f"[red]Error loading Knowledge Abstract:[/red] {e}")
-            raise typer.Exit(1)
+            raise typer.Exit(1) from e
 
     console.print("[bold blue]Visualizing with OntoSight...[/bold blue]")
     logger.info("stage=visualizing")
@@ -428,7 +428,7 @@ def show(ka_path: str = typer.Argument(..., help="Knowledge Abstract directory")
         logger.info("stage=visualization_complete")
     except Exception as e:
         console.print(f"[red]Error during visualization:[/red] {e}")
-        raise typer.Exit(1)
+        raise typer.Exit(1) from e
 
     console.print()
     console.print("[dim]Continue exploring:[/dim]")
@@ -527,7 +527,7 @@ def search(
 
         except Exception as e:
             console.print(f"[red]Error:[/red] {e}")
-            raise typer.Exit(1)
+            raise typer.Exit(1) from e
 
     console.print()
     if not results:
@@ -596,7 +596,7 @@ def chat_loop(ka, ka_path: str):
             console.print(f'[dim]  he search {ka_path} "keyword"  # Search[/dim]')
             console.print(f"[dim]  he info {ka_path}              # View info[/dim]")
             break
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001  # pylint: disable=broad-except
             console.print(f"[red]Error:[/red] {e}")
 
 
@@ -652,7 +652,7 @@ def talk(
 
         except Exception as e:
             console.print(f"[red]Error:[/red] {e}")
-            raise typer.Exit(1)
+            raise typer.Exit(1) from e
 
     if interactive:
         chat_loop(ka, ka_path)
@@ -670,7 +670,7 @@ def talk(
                         console.print(f"[dim]{i}. {str(item)[:100]}...[/dim]")
             except Exception as e:
                 console.print(f"[red]Error:[/red] {e}")
-                raise typer.Exit(1)
+                raise typer.Exit(1) from e
 
         console.print()
         console.print("[dim]Continue:[/dim]")
@@ -684,12 +684,12 @@ def talk(
 @app.command(name="feed")
 def feed(
     ka_path: str = typer.Argument(..., help="Knowledge Abstract directory"),
-    input: str = typer.Argument(..., help="Input file path or '-' for stdin"),
+    input_path: str = typer.Argument(..., help="Input file path or '-' for stdin"),
     template: Optional[str] = typer.Option(None, "--template", "-t", help="Template"),
     lang: Optional[str] = typer.Option(None, "--lang", "-l", help="Language"),
 ):
     """Append knowledge to an existing Knowledge Abstract."""
-    logger.info("command=feed ka_path=%s input=%s", ka_path, input)
+    logger.info("command=feed ka_path=%s input=%s", ka_path, input_path)
     validate_config()
 
     output_path = validate_ka_path(ka_path)
@@ -707,7 +707,7 @@ def feed(
         lang = metadata.get("lang", "zh")
 
     console.print(f"[blue]Knowledge Abstract:[/blue] {ka_path}")
-    console.print(f"[blue]Input:[/blue] {input}")
+    console.print(f"[blue]Input:[/blue] {input_path}")
     console.print(f"[blue]Template:[/blue] {template} (from metadata)")
     console.print(f"[blue]Language:[/blue] {lang} (from metadata)")
     console.print()
@@ -717,7 +717,7 @@ def feed(
         console.print(f"[green]Template loaded:[/green] {template}")
     except ValueError as e:
         console.print(f"[red]Error:[/red] {e}")
-        raise typer.Exit(1)
+        raise typer.Exit(1) from e
 
     with Progress(
         SpinnerColumn(),
@@ -729,7 +729,7 @@ def feed(
         ka.load(output_path)
 
         progress.update(task, description="Reading input...")
-        text = read_input(input)
+        text = read_input(input_path)
         console.print(f"[dim]Input text: {len(text)} characters[/dim]")
 
         progress.update(task, description="Appending knowledge...")
@@ -805,7 +805,7 @@ def build_index(
 
         except Exception as e:
             console.print(f"[red]Error:[/red] {e}")
-            raise typer.Exit(1)
+            raise typer.Exit(1) from e
 
     console.print()
     console.print(f"[bold green]Success![/bold green] Index built for {ka_path}")
