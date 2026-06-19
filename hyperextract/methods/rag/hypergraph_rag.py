@@ -10,12 +10,13 @@ each hyperedge encodes a complete semantic unit (sentence or event), maintaining
 the natural information flow and contextual dependencies of the source material.
 """
 
-from typing import List
 from hashlib import md5
-from pydantic import BaseModel, Field
+from typing import List
+
 from langchain_core.embeddings import Embeddings
 from langchain_core.language_models import BaseChatModel
 from ontomem.merger import MergeStrategy
+from pydantic import BaseModel, Field
 
 from hyperextract.types.hypergraph import AutoHypergraph, AutoHypergraphSchema
 
@@ -69,7 +70,7 @@ class EdgeSchema(BaseModel):
 
 HyperGraph_RAG_EDGE_EXTRACTION_PROMPT = """
 You are an expert information extraction system specializing in Hypergraph RAG.
-Your goal is to extract "Hyper-edges" from the provided text. 
+Your goal is to extract "Hyper-edges" from the provided text.
 
 A **Hyper-edge** represents a specific "knowledge segment" (a sentence or event context) that connects multiple entities together.
 
@@ -89,7 +90,7 @@ A **Hyper-edge** represents a specific "knowledge segment" (a sentence or event 
 # Few-Shot Examples
 
 ## Example 1
-**Input Text**: 
+**Input Text**:
 "Alex clenched his jaw, the buzz of frustration dull against the backdrop of Taylor's authoritarian certainty."
 
 **Output**:
@@ -115,7 +116,7 @@ A **Hyper-edge** represents a specific "knowledge segment" (a sentence or event 
 ]
 
 ## Example 2
-**Input Text**: 
+**Input Text**:
 "The device could change the game for us," Taylor said, observing the machine with reverence.
 
 **Output**:
@@ -201,10 +202,17 @@ class HyperGraph_RAG(AutoHypergraph[NodeSchema, EdgeSchema]):
             max_workers (int): Maximum parallel workers for batch extraction (default: 10).
             verbose (bool): Whether to display detailed extraction logs (default: True).
         """
+
         # 1. Define Key Extractors
-        node_key_fn = lambda x: x.name
-        edge_key_fn = lambda x: md5(x.knowledge_segment.encode()).hexdigest()
-        nodes_in_edge_fn = lambda x: [entity.name for entity in x.related_entities]
+        def node_key_fn(x):
+            return x.name
+
+        def edge_key_fn(x):
+            # trunk-ignore(bandit/B324)
+            return md5(x.knowledge_segment.encode()).hexdigest()
+
+        def nodes_in_edge_fn(x):
+            return [entity.name for entity in x.related_entities]
 
         # 4. Call parent class initialization
         super().__init__(
@@ -233,7 +241,9 @@ class HyperGraph_RAG(AutoHypergraph[NodeSchema, EdgeSchema]):
             verbose=verbose,
         )
 
-    def _extract_data(self, text: str) -> AutoHypergraphSchema[NodeSchema, EdgeSchema]:
+    def _extract_data(
+        self, text: str, _on_chunk_done=None
+    ) -> AutoHypergraphSchema[NodeSchema, EdgeSchema]:
         """Extract hypergraph knowledge from text via knowledge segment identification.
 
         Performs simultaneous extraction of knowledge segments (hyperedges) and associated entities

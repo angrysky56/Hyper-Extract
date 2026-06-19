@@ -3,18 +3,19 @@ COG_RAG: Cognitive-Inspired Dual-Hypergraph RAG System Pattern
 Extracts and manages Theme-Entity relationships where Themes act as Hyperedges connecting multiple Entities.
 """
 
-import os
 import json
+import os
 from datetime import datetime
-from typing import List
 from hashlib import md5
-from pydantic import BaseModel, Field
-from hyperextract.types.hypergraph import AutoHypergraph, AutoHypergraphSchema
-from langchain_core.prompts import ChatPromptTemplate
+from typing import List
+
 from langchain_core.embeddings import Embeddings
 from langchain_core.language_models import BaseChatModel
+from langchain_core.prompts import ChatPromptTemplate
 from ontomem.merger import CustomRuleMerger
+from pydantic import BaseModel, Field
 
+from hyperextract.types.hypergraph import AutoHypergraph, AutoHypergraphSchema
 
 # ============================================================================
 # Node Schema
@@ -107,12 +108,12 @@ Entities will serve as participants in complex events later.
 
 COG_RAG_EDGE_EXTRACTION_PROMPT = """
 -Goal-
-You are an expert hypergraph knowledge extraction assistant. 
+You are an expert hypergraph knowledge extraction assistant.
 Extract "Hyperedges" that represent relationships, events, or thematic groupings involving MULTIPLE entities (2 or more) simultaneously.
 
 -Definition-
-A Hyperedge is a unified concept for any connection. 
-It treats all involved entities as **participants** in a shared context 
+A Hyperedge is a unified concept for any connection.
+It treats all involved entities as **participants** in a shared context
 (e.g., a conversation, a joint mission, a conflict, or a shared concept).
 
 -Constraints-
@@ -186,13 +187,17 @@ class Cog_RAG_ThemeLayer(AutoHypergraph[NodeSchema, ThemeSchema]):
     ):
         # 1. Define Key Extractors
         # Node key: exact match by name
-        node_key_fn = lambda x: x.name
+        def node_key_fn(x):
+            return x.name
 
         # Theme key: md5 hash of description (Semantic uniqueness)
-        edge_key_fn = lambda x: md5(x.description.encode()).hexdigest()
+        def edge_key_fn(x):
+            # trunk-ignore(bandit/B324)
+            return md5(x.description.encode()).hexdigest()
 
         # Nodes in theme
-        nodes_in_edge_fn = lambda x: [n.name for n in x.participants]
+        def nodes_in_edge_fn(x):
+            return [n.name for n in x.participants]
 
         # 2. Create custom Mergers
         node_merger = CustomRuleMerger(
@@ -231,7 +236,7 @@ class Cog_RAG_ThemeLayer(AutoHypergraph[NodeSchema, ThemeSchema]):
             verbose=verbose,
         )
 
-    def _extract_data(self, text: str) -> AutoHypergraphSchema:
+    def _extract_data(self, text: str, _on_chunk_done=None) -> AutoHypergraphSchema:
         """
         Extract Themes and nested Participants (One-Stage).
         Implements the HyperGraph_RAG extraction pattern.
@@ -293,10 +298,15 @@ class Cog_RAG_DetailLayer(AutoHypergraph[NodeSchema, EdgeSchema]):
         max_workers: int = 10,
         verbose: bool = False,
     ):
-        node_key_fn = lambda x: x.name
+        def node_key_fn(x):
+            return x.name
+
         # Relations: Unique by Sorted Participants
-        edge_key_fn = lambda x: tuple(sorted(x.participants))
-        nodes_in_edge_fn = lambda x: x.participants
+        def edge_key_fn(x):
+            return tuple(sorted(x.participants))
+
+        def nodes_in_edge_fn(x):
+            return x.participants
 
         node_merger = CustomRuleMerger(
             key_extractor=node_key_fn,

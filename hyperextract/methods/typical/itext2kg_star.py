@@ -7,13 +7,14 @@ standardized triple-based knowledge graphs.
 Prompts and schemas are adapted from the original iText2KG_Star implementation.
 """
 
-from typing import Optional
 from datetime import datetime
+from typing import Optional
+
+from langchain_core.embeddings import Embeddings
+from langchain_core.language_models import BaseChatModel
+from ontomem.merger import MergeStrategy
 from pydantic import BaseModel, Field
 from semhash import SemHash
-from langchain_core.language_models import BaseChatModel
-from langchain_core.embeddings import Embeddings
-from ontomem.merger import MergeStrategy
 
 from hyperextract.types.graph import AutoGraph, AutoGraphSchema
 from hyperextract.utils.logging import get_logger
@@ -89,7 +90,7 @@ class EdgeSchema(BaseModel):
 
 
 iText2KG_Star_EDGE_EXTRACTION_PROMPT = """
-# DIRECTIVES : 
+# DIRECTIVES :
 - Extract all meaningful relationships directly from the provided context.
 - For each relationship, identify the start entity and end entity involved.
 - Each entity should have a clear name and appropriate label/type.
@@ -160,13 +161,16 @@ class iText2KG_Star(AutoGraph[NodeSchema, EdgeSchema]):
 
         # 1. Define Key Extractors (critical for deduplication)
         # Node deduplication: exact match by name
-        node_key_fn = lambda x: x.name
+        def node_key_fn(x):
+            return x.name
 
         # Edge deduplication: combination of subject-predicate-object triple
-        edge_key_fn = lambda x: f"{x.startNode.name}|{x.name}|{x.endNode.name}"
+        def edge_key_fn(x):
+            return f"{x.startNode.name}|{x.name}|{x.endNode.name}"
 
         # 2. Edge consistency check: tell AutoGraph which nodes this edge connects
-        nodes_in_edge_fn = lambda x: (x.startNode.name, x.endNode.name)
+        def nodes_in_edge_fn(x):
+            return (x.startNode.name, x.endNode.name)
 
         # 3. Call parent class initialization
         logger.info("🔧 Initializing iText2KG_Star")
@@ -198,7 +202,7 @@ class iText2KG_Star(AutoGraph[NodeSchema, EdgeSchema]):
 
     # ==================== Extraction Pipeline ====================
 
-    def _extract_data(self, text: str) -> AutoGraphSchema:
+    def _extract_data(self, text: str, _on_chunk_done=None) -> AutoGraphSchema:
         """Extract edges directly, then derive nodes (One-stage extraction).
 
         Process:

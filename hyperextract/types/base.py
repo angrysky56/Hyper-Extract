@@ -411,20 +411,41 @@ class BaseAutoType(ABC, Generic[T]):
         """
         logger.debug("stage=feed_text_start input_chars=%d", len(text))
 
+        chunk_done_called = False
+
         def handle_chunk(partial_result, completed, total):
+            nonlocal chunk_done_called
+            chunk_done_called = True
             if partial_result is not None:
                 self._update_data_state(partial_result)
             if on_progress:
                 on_progress(completed, total)
 
+        import inspect
+
+        sig = inspect.signature(self._extract_data)
+        has_on_chunk_done = "on_chunk_done" in sig.parameters
+
         if len(text) > self.chunk_size:
-            self._extract_data(text, on_chunk_done=handle_chunk)
-            # data state already incrementally updated in handle_chunk
+            if has_on_chunk_done:
+                extracted_data = self._extract_data(text, on_chunk_done=handle_chunk)
+            else:
+                extracted_data = self._extract_data(text)
+
+            if not chunk_done_called:
+                self._update_data_state(extracted_data)
+                if on_progress:
+                    on_progress(1, 1)
         else:
-            extracted_data = self._extract_data(text)
-            self._update_data_state(extracted_data)
-            if on_progress:
-                on_progress(1, 1)
+            if has_on_chunk_done:
+                extracted_data = self._extract_data(text, on_chunk_done=handle_chunk)
+            else:
+                extracted_data = self._extract_data(text)
+
+            if not chunk_done_called:
+                self._update_data_state(extracted_data)
+                if on_progress:
+                    on_progress(1, 1)
 
         logger.debug("stage=extract_done")
 

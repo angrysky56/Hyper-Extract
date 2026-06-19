@@ -7,17 +7,18 @@ standardized triple-based knowledge graphs.
 Prompts and schemas are adapted from the original Atom implementation.
 """
 
-from typing import Optional, List
 from datetime import datetime
-from pydantic import BaseModel, Field
-from semhash import SemHash
+from typing import List, Optional
+
+from langchain_core.embeddings import Embeddings
 from langchain_core.language_models import BaseChatModel
 from langchain_core.prompts import ChatPromptTemplate
-from langchain_core.embeddings import Embeddings
-from ontomem.merger import MergeStrategy, CustomRuleMerger
+from ontomem.merger import CustomRuleMerger, MergeStrategy
+from pydantic import BaseModel, Field
+from semhash import SemHash
 
-from hyperextract.utils.logging import get_logger
 from hyperextract.types.graph import AutoGraph, AutoGraphSchema
+from hyperextract.utils.logging import get_logger
 
 logger = get_logger(__name__)
 
@@ -286,7 +287,7 @@ Merge strategy:
 1. **startNode/endNode**: Keep the node definitions consistent.
 2. **name**: Keep the canonical predicate name (since they are already grouped by this key).
 3. **t_start**: Collect ALL distinct start dates/times from all inputs into a single list. Remove exact duplicates.
-4. **t_end**: Collect ALL distinct end dates/times from all inputs into a single list. Remove exact duplicates. 
+4. **t_end**: Collect ALL distinct end dates/times from all inputs into a single list. Remove exact duplicates.
 5. **t_obs**: Collect ALL distinct observation dates from all inputs into a single list.
 6. **atomic_facts**: Merge all evidence strings into a single list. Remove exact duplicate strings.
 """
@@ -353,13 +354,16 @@ class Atom(AutoGraph[NodeSchema, EdgeSchema]):
 
         # 1. Define Key Extractors (critical for deduplication)
         # Node deduplication: exact match by name
-        node_key_fn = lambda x: x.name
+        def node_key_fn(x):
+            return x.name
 
         # Edge deduplication: combination of subject-predicate-object triple
-        edge_key_fn = lambda x: f"{x.startNode.name}|{x.name}|{x.endNode.name}"
+        def edge_key_fn(x):
+            return f"{x.startNode.name}|{x.name}|{x.endNode.name}"
 
         # 2. Edge consistency check: tell AutoGraph which nodes this edge connects
-        nodes_in_edge_fn = lambda x: (x.startNode.name, x.endNode.name)
+        def nodes_in_edge_fn(x):
+            return (x.startNode.name, x.endNode.name)
 
         # Edge merger: merges relationship descriptions using EDGE_MERGE_RULE
         edge_merger = CustomRuleMerger(
@@ -399,7 +403,7 @@ class Atom(AutoGraph[NodeSchema, EdgeSchema]):
 
     # ==================== Extraction Pipeline ====================
 
-    def _extract_data(self, text: str) -> AutoGraphSchema:
+    def _extract_data(self, text: str, _on_chunk_done=None) -> AutoGraphSchema:
         """Extract atomic facts first, then extract edges (Two-stage extraction).
 
         Process:

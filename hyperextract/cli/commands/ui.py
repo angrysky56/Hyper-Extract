@@ -3,8 +3,6 @@
 import time
 import webbrowser
 import threading
-from typing import Optional
-import typer
 from rich.console import Console
 
 from hyperextract.utils.logging import get_logger
@@ -36,9 +34,15 @@ def start_ui_server(
     url = f"http://{host}:{port}"
 
     console.print()
-    console.print("[bold cyan]==================================================[/bold cyan]")
-    console.print("[bold cyan]         Hyper-Extract Professional Web UI       [/bold cyan]")
-    console.print("[bold cyan]==================================================[/bold cyan]")
+    console.print(
+        "[bold cyan]==================================================[/bold cyan]"
+    )
+    console.print(
+        "[bold cyan]         Hyper-Extract Professional Web UI       [/bold cyan]"
+    )
+    console.print(
+        "[bold cyan]==================================================[/bold cyan]"
+    )
     console.print()
     console.print(f"  [green]Backend API Server:[/green]  {url}/api")
     console.print(f"  [green]Web Interface URL:[/green]  {url}")

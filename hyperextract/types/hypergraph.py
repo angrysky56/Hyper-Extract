@@ -5,28 +5,30 @@ Key Difference from AutoGraph:
 - Consistency validation checks if *ALL* participants in a hyperedge exist in the node registry.
 """
 
-from typing import (
-    Any,
-    List,
-    Type,
-    Tuple,
-    Callable,
-    TypeVar,
-    Generic,
-    TYPE_CHECKING,
-)
 from pathlib import Path
-from pydantic import BaseModel, Field, create_model
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    Generic,
+    List,
+    Tuple,
+    Type,
+    TypeVar,
+)
+
 from langchain_core.embeddings import Embeddings
-from langchain_core.messages import AIMessage
 from langchain_core.language_models.chat_models import BaseChatModel
+from langchain_core.messages import AIMessage
 from langchain_core.prompts import ChatPromptTemplate
 from ontomem import OMem
-from ontomem.merger import MergeStrategy, create_merger, BaseMerger
+from ontomem.merger import BaseMerger, MergeStrategy, create_merger
 from ontosight import view_hypergraph
+from pydantic import BaseModel, Field, create_model
+
+from hyperextract.utils.logging import get_logger
 
 from .base import BaseAutoType
-from hyperextract.utils.logging import get_logger
 
 logger = get_logger(__name__)
 
@@ -39,7 +41,7 @@ EdgeSchema = TypeVar("EdgeSchema", bound=BaseModel)  # Represents a Hyperedge
 # Default Extraction Prompts
 # ============================================================================
 
-DEFAULT_HYPERGRAPH_PROMPT = """You are an expert hypergraph knowledge extraction assistant. 
+DEFAULT_HYPERGRAPH_PROMPT = """You are an expert hypergraph knowledge extraction assistant.
 Extract all entities (nodes) and their complex relationships (hyperedges) from the following text.
 
 CRITICAL RULES:
@@ -53,14 +55,14 @@ CRITICAL RULES:
 {source_text}
 """
 
-DEFAULT_NODE_PROMPT = """Extract all distinct entities from the text. 
+DEFAULT_NODE_PROMPT = """Extract all distinct entities from the text.
 Entities will serve as participants in complex events later.
 
 ### Source Text:
 {source_text}
 """
 
-DEFAULT_EDGE_PROMPT = """You are an expert hypergraph extraction assistant. 
+DEFAULT_EDGE_PROMPT = """You are an expert hypergraph extraction assistant.
 Extract complex relationships (hyperedges) that involve MULTIPLE entities simultaneously.
 
 CRITICAL RULES:
@@ -160,10 +162,12 @@ class AutoHypergraph(
         embedder: Embeddings,
         *,
         extraction_mode: str = "two_stage",  # Recommended for complex relations
-        node_strategy_or_merger: MergeStrategy
-        | BaseMerger = MergeStrategy.LLM.BALANCED,
-        edge_strategy_or_merger: MergeStrategy
-        | BaseMerger = MergeStrategy.LLM.BALANCED,
+        node_strategy_or_merger: (
+            MergeStrategy | BaseMerger
+        ) = MergeStrategy.LLM.BALANCED,
+        edge_strategy_or_merger: (
+            MergeStrategy | BaseMerger
+        ) = MergeStrategy.LLM.BALANCED,
         prompt: str = "",
         prompt_for_node_extraction: str = "",
         prompt_for_edge_extraction: str = "",
@@ -429,7 +433,9 @@ class AutoHypergraph(
 
     # ==================== Extraction Pipeline ====================
 
-    def _extract_data(self, text: str) -> AutoHypergraphSchema:
+    def _extract_data(
+        self, text: str, _on_chunk_done: Any = None
+    ) -> AutoHypergraphSchema:
         """Main extraction logic dispatcher."""
         if self.extraction_mode == "two_stage":
             raw_graph = self._extract_data_by_two_stage(text)
@@ -519,7 +525,7 @@ class AutoHypergraph(
     ) -> List[EdgeListSchema[EdgeSchema]]:
         """Batch extract hyperedges using corresponding node lists as context."""
         inputs = []
-        for chunk, node_list in zip(chunks, node_lists):
+        for chunk, node_list in zip(chunks, node_lists, strict=False):
             nodes = node_list.items if node_list else []
             if not nodes:
                 known_nodes = "No entities identified in this chunk."
@@ -589,8 +595,10 @@ class AutoHypergraph(
 
     def merge_batch_data(
         self,
-        data_list_or_tuple: List[AutoHypergraphSchema]
-        | Tuple[List[List[NodeSchema]], List[List[EdgeSchema]]],
+        data_list_or_tuple: (
+            List[AutoHypergraphSchema]
+            | Tuple[List[List[NodeSchema]], List[List[EdgeSchema]]]
+        ),
     ) -> AutoHypergraphSchema:
         """Merge multiple hypergraphs or node/edge tuples into one.
 
@@ -621,9 +629,8 @@ class AutoHypergraph(
 
         else:
             # Format: Tuple of (nodes_lists, edges_lists)
-            assert len(data_list_or_tuple) == 2, (
-                "Invalid input format for batch merging"
-            )
+            if len(data_list_or_tuple) != 2:
+                raise ValueError("Invalid input format for batch merging")
             nodes_lists, edges_lists = data_list_or_tuple[0], data_list_or_tuple[1]
 
             # Handle empty nodes/edges lists
@@ -632,16 +639,14 @@ class AutoHypergraph(
                 return self.graph_schema(nodes=[], edges=[])
 
             if nodes_lists:
-                assert isinstance(nodes_lists[0][0], self.node_schema), (
-                    "Invalid node list format for batch merging"
-                )
+                if not isinstance(nodes_lists[0][0], self.node_schema):
+                    raise TypeError("Invalid node list format for batch merging")
             if edges_lists:
-                assert isinstance(edges_lists[0][0], self.edge_schema), (
-                    "Invalid edge list format for batch merging"
-                )
+                if not isinstance(edges_lists[0][0], self.edge_schema):
+                    raise TypeError("Invalid edge list format for batch merging")
 
             all_nodes, all_edges = [], []
-            for node_list, edge_list in zip(nodes_lists, edges_lists):
+            for node_list, edge_list in zip(nodes_lists, edges_lists, strict=False):
                 all_nodes.extend(node_list)
                 all_edges.extend(edge_list)
 
@@ -780,9 +785,8 @@ class AutoHypergraph(
             if nodes:
                 context_parts.append("=== Relevant Nodes ===")
                 for node in nodes:
-                    assert isinstance(node, BaseModel), (
-                        "Node must be a Pydantic BaseModel"
-                    )
+                    if not isinstance(node, BaseModel):
+                        raise TypeError("Node must be a Pydantic BaseModel")
                     context_parts.append(node.model_dump_json(indent=2))
 
         # Step 3: Retrieve and format edges context
@@ -792,9 +796,8 @@ class AutoHypergraph(
             if edges:
                 context_parts.append("=== Relevant Edges ===")
                 for edge in edges:
-                    assert isinstance(edge, BaseModel), (
-                        "Edge must be a Pydantic BaseModel"
-                    )
+                    if not isinstance(edge, BaseModel):
+                        raise TypeError("Edge must be a Pydantic BaseModel")
                     context_parts.append(edge.model_dump_json(indent=2))
 
         # Step 4: Combine context or use fallback
@@ -914,6 +917,7 @@ class AutoHypergraph(
                 retrieved_nodes = response.additional_kwargs.get("retrieved_nodes", [])
                 retrieved_edges = response.additional_kwargs.get("retrieved_edges", [])
                 return content, (retrieved_nodes, retrieved_edges)
+
         else:
             logger.info(
                 "Visualizing hypergraph without search and chat capabilities (no indices detected)."
