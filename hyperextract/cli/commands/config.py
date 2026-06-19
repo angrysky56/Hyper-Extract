@@ -63,6 +63,7 @@ def config_callback(
         ("he config show", "Display current configuration"),
         ("he config llm", "Configure LLM settings"),
         ("he config embedder", "Configure Embedder settings"),
+        ("he config agent", "Configure Agent settings"),
     ]
 
     for cmd, desc in commands_info:
@@ -80,6 +81,7 @@ def config_callback(
     console.print("  [yellow]2.[/yellow] Or configure individually:")
     console.print("     [green]he config llm --api-key YOUR_KEY[/green]")
     console.print("     [green]he config embedder --api-key YOUR_KEY[/green]")
+    console.print("     [green]he config agent --api-key YOUR_KEY[/green]")
     console.print()
 
     console.print("[bold cyan]Environment Variables (alternative):[/bold cyan]")
@@ -116,6 +118,7 @@ def _show_config():
 
     llm_cfg = cfg["llm"]
     emb_cfg = cfg["embedder"]
+    agent_cfg = cfg["agent"]
 
     table.add_row(
         "LLM",
@@ -130,6 +133,13 @@ def _show_config():
         emb_cfg["model"],
         emb_cfg["api_key"][:10] + "..." if emb_cfg["api_key"] else "(not set)",
         emb_cfg["base_url"] or "(default)",
+    )
+    table.add_row(
+        "Agent",
+        agent_cfg.get("provider", "-") or "-",
+        agent_cfg["model"],
+        agent_cfg["api_key"][:10] + "..." if agent_cfg["api_key"] else "(not set)",
+        agent_cfg["base_url"] or "(default)",
     )
 
     console.print(table)
@@ -266,6 +276,69 @@ def embedder(
         base_url=base_url,
     )
     console.print("[green]Embedder configuration updated[/green]")
+
+
+@app.command(name="agent")
+def agent(
+    provider: Optional[str] = typer.Option(
+        None,
+        "--provider",
+        "-p",
+        help="Provider preset: openai, bailian, vllm",
+    ),
+    api_key: Optional[str] = typer.Option(
+        None,
+        "--api-key",
+        "-k",
+        help="Agent API key",
+    ),
+    model: Optional[str] = typer.Option(
+        None,
+        "--model",
+        "-m",
+        help="Agent model name",
+    ),
+    base_url: Optional[str] = typer.Option(
+        None,
+        "--base-url",
+        "-u",
+        help="Custom API base URL",
+    ),
+    show_cfg: bool = typer.Option(
+        False, "--show", help="Show current Agent configuration"
+    ),
+    unset: bool = typer.Option(False, "--unset", help="Unset Agent configuration"),
+):
+    """Configure Agent settings."""
+    logger.info("command=config-agent show=%s unset=%s", show_cfg, unset)
+    config = ConfigManager()
+
+    if show_cfg:
+        cfg = config.get_agent_config()
+        table = Table(title="Agent Configuration", show_header=False)
+        table.add_column("Key", style="cyan")
+        table.add_column("Value", style="green")
+        table.add_row("Provider", cfg.provider or "(not set)")
+        table.add_row("Model", cfg.model)
+        table.add_row(
+            "API Key", cfg.api_key[:10] + "..." if cfg.api_key else "(not set)"
+        )
+        table.add_row("Base URL", cfg.base_url or "(default)")
+        console.print(table)
+        return
+
+    if unset:
+        config.unset_agent()
+        console.print("[green]Agent configuration cleared[/green]")
+        return
+
+    config.set_agent(
+        provider=provider,
+        api_key=api_key,
+        model=model,
+        base_url=base_url,
+    )
+    console.print("[green]Agent configuration updated[/green]")
 
 
 @app.command(name="init")

@@ -1,14 +1,15 @@
 import json
-from pathlib import Path
-from datetime import datetime
-from pydantic import BaseModel
 from abc import ABC, abstractmethod
-from typing import TypeVar, Generic, Any, Dict, Type, List
-from langchain_core.messages import AIMessage
+from datetime import datetime
+from pathlib import Path
+from typing import Any, Dict, Generic, List, Type, TypeVar
+
 from langchain_core.embeddings import Embeddings
-from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.language_models.chat_models import BaseChatModel
+from langchain_core.messages import AIMessage
+from langchain_core.prompts import ChatPromptTemplate
 from langchain_text_splitters import RecursiveCharacterTextSplitter
+from pydantic import BaseModel
 
 from hyperextract.utils.logging import get_logger
 
@@ -245,7 +246,7 @@ class BaseAutoType(ABC, Generic[T]):
 
     # ==================== Extraction & Merge ====================
 
-    def _extract_data(self, text: str) -> T:
+    def _extract_data(self, text: str, on_chunk_done=None) -> T:
         """Internal: Unified extraction logic (Chunking -> LLM -> Merge)."""
         logger.debug(
             "stage=extract_start input_chars=%d chunk_size=%d",
@@ -277,9 +278,30 @@ class BaseAutoType(ABC, Generic[T]):
                 self.max_workers,
                 len(inputs),
             )
-            extracted_data_list = self.data_extractor.batch(
-                inputs, config={"max_concurrency": self.max_workers}
-            )
+
+            extracted_data_list = []
+            import concurrent.futures
+
+            with concurrent.futures.ThreadPoolExecutor(
+                max_workers=self.max_workers
+            ) as executor:
+                future_to_chunk = {
+                    executor.submit(self.data_extractor.invoke, inp): i
+                    for i, inp in enumerate(inputs)
+                }
+                for future in concurrent.futures.as_completed(future_to_chunk):
+                    i = future_to_chunk[future]
+                    try:
+                        result = future.result()
+                        extracted_data_list.append(result)
+                        if on_chunk_done:
+                            on_chunk_done(result, len(extracted_data_list), len(chunks))
+                    except Exception as exc:
+                        logger.error("Chunk %d extraction failed: %s", i, exc)
+                        extracted_data_list.append(None)
+                        if on_chunk_done:
+                            on_chunk_done(None, len(extracted_data_list), len(chunks))
+
             logger.debug(
                 "stage=llm_batch_complete results=%d", len(extracted_data_list)
             )
@@ -373,7 +395,7 @@ class BaseAutoType(ABC, Generic[T]):
 
         return new_instance
 
-    def feed_text(self, text: str) -> "BaseAutoType[T]":
+    def feed_text(self, text: str, on_progress=None) -> "BaseAutoType[T]":
         """
         Ingests text into the CURRENT knowledge abstract instance.
 
@@ -382,17 +404,29 @@ class BaseAutoType(ABC, Generic[T]):
 
         Args:
             text: Input text.
+            on_progress: Optional callback (completed_chunks, total_chunks)
 
         Returns:
             Self (the current instance).
         """
         logger.debug("stage=feed_text_start input_chars=%d", len(text))
-        extracted_data = self._extract_data(text)
-        logger.debug("stage=extract_done")
 
-        # Use UPDATE hook instead of manual merge+set
-        self._update_data_state(extracted_data)
-        logger.debug("stage=data_merged")
+        def handle_chunk(partial_result, completed, total):
+            if partial_result is not None:
+                self._update_data_state(partial_result)
+            if on_progress:
+                on_progress(completed, total)
+
+        if len(text) > self.chunk_size:
+            self._extract_data(text, on_chunk_done=handle_chunk)
+            # data state already incrementally updated in handle_chunk
+        else:
+            extracted_data = self._extract_data(text)
+            self._update_data_state(extracted_data)
+            if on_progress:
+                on_progress(1, 1)
+
+        logger.debug("stage=extract_done")
 
         self.metadata["updated_at"] = datetime.now()
 
@@ -683,8 +717,21 @@ class BaseAutoType(ABC, Generic[T]):
                 f"Both operands must be instances of the same knowledge class."
             )
 
-        # Check 2: Both must have the same data schema
-        if self._data_schema != other._data_schema:
+        # Check 2: Both must have the same data schema (handling dynamically created identical models)
+        def _schemas_match(s1: Type[BaseModel], s2: Type[BaseModel]) -> bool:
+            if s1 == s2:
+                return True
+            if s1.__name__ != s2.__name__:
+                return False
+            if list(s1.model_fields.keys()) != list(s2.model_fields.keys()):
+                return False
+            for k, f1 in s1.model_fields.items():
+                f2 = s2.model_fields[k]
+                if f1.annotation != f2.annotation:
+                    return False
+            return True
+
+        if not _schemas_match(self._data_schema, other._data_schema):
             raise TypeError(
                 f"Cannot add knowledge instances with different data schemas. "
                 f"Left schema: {self._data_schema.__name__}, "
@@ -693,7 +740,7 @@ class BaseAutoType(ABC, Generic[T]):
             )
 
         # Merge the data from both instances
-        merged_data = self.merge_batch_data([self._data, other._data])
+        merged_data = self.merge_batch_data([self.data, other.data])
 
         # Create a new instance with the same configuration
         new_instance = self._create_empty_instance()

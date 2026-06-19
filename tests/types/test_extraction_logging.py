@@ -117,7 +117,7 @@ class TestBaseExtractionLogging:
         assert "stage=feed_text_start" in log_text
         assert "stage=extract_start" in log_text
         assert "stage=extract_complete" in log_text
-        assert "stage=data_merged" in log_text
+        assert "stage=merge_start" in log_text
 
 
 class TestGraphExtractionLogging:

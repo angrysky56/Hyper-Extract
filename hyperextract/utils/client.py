@@ -467,3 +467,32 @@ def get_client(config_path: str | Path = None) -> Tuple[BaseChatModel, Embedding
     )
 
     return llm_client, embedder_client
+
+
+def get_agent_client(config_path: str | Path = None) -> BaseChatModel:
+    """Get Agent LLM client from config.
+
+    Args:
+        config_path: Config file path, default ~/.he/config.toml
+
+    Returns:
+        agent_client (BaseChatModel)
+    """
+    from hyperextract.cli.config import ConfigManager
+
+    path = Path(config_path) if config_path else DEFAULT_CONFIG_FILE
+    manager = ConfigManager(path)
+
+    agent_config = manager.get_agent_config()
+
+    # Build Agent client
+    agent_client = create_llm(
+        {
+            "provider": agent_config.provider,
+            "model": agent_config.model,
+            "base_url": agent_config.base_url,
+            "api_key": agent_config.api_key,
+        }
+    )
+
+    return agent_client

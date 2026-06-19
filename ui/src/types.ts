@@ -18,6 +18,7 @@ export interface ServiceConfig {
 export interface AppConfig {
   llm: ServiceConfig;
   embedder: ServiceConfig;
+  agent: ServiceConfig;
 }
 
 export interface KARecord {
@@ -41,6 +42,8 @@ export interface TaskRecord {
   started_at: string;
   completed_at: string | null;
   output_path: string;
+  template?: string;
+  partial_data?: any;
 }
 
 export interface GraphNode {

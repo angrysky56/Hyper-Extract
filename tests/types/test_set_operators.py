@@ -1,8 +1,9 @@
 """Unit tests for AutoSet key operations."""
 
+from typing import Optional
+
 import pytest
 from pydantic import BaseModel, Field
-from typing import Optional
 
 from hyperextract.types import AutoSet
 
@@ -84,6 +85,33 @@ class TestAutoSetOperators:
         auto_set2.add(ProductItemSchema(sku="P002", name="Product 2"))
 
         result = auto_set1 | auto_set2
+
+        assert len(result) == 2
+        assert "P001" in result
+        assert "P002" in result
+
+    def test_add_operator(self, llm_client, embedder):
+        """Test that + (addition) operator is supported and merges two AutoSets."""
+        auto_set1 = AutoSet(
+            item_schema=ProductItemSchema,
+            llm_client=llm_client,
+            embedder=embedder,
+            key_extractor=lambda x: x.sku,
+        )
+        auto_set2 = AutoSet(
+            item_schema=ProductItemSchema,
+            llm_client=llm_client,
+            embedder=embedder,
+            key_extractor=lambda x: x.sku,
+        )
+
+        auto_set1.add(ProductItemSchema(sku="P001", name="Product 1"))
+        auto_set2.add(ProductItemSchema(sku="P002", name="Product 2"))
+
+        # Wait, since the default merger for AutoSet uses self._merger.merge,
+        # which delegates to OMem/merger, we mock it or configure it.
+        # But here we just want to verify + operator doesn't raise AttributeError.
+        result = auto_set1 + auto_set2
 
         assert len(result) == 2
         assert "P001" in result

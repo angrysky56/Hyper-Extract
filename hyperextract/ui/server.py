@@ -15,7 +15,7 @@ from pydantic import BaseModel
 
 from hyperextract import Template
 from hyperextract.cli.config import ConfigManager, load_ka_metadata
-from hyperextract.cli.utils import get_template_from_ka, validate_ka_path
+from hyperextract.cli.utils import get_template_from_ka, read_input, validate_ka_path
 
 # Setup UI Logger
 logging.basicConfig(level=logging.INFO)
@@ -83,8 +83,16 @@ class EmbedderConfigUpdate(BaseModel):
     base_url: Optional[str] = None
 
 
+class AgentConfigUpdate(BaseModel):
+    provider: Optional[str] = None
+    model: Optional[str] = None
+    api_key: Optional[str] = None
+    base_url: Optional[str] = None
+
+
 class ParseRequest(BaseModel):
-    input_text: str
+    input_text: Optional[str] = None
+    input_path: Optional[str] = None
     output_path: str
     template: str
     language: str
@@ -94,7 +102,8 @@ class ParseRequest(BaseModel):
 
 class FeedRequest(BaseModel):
     path: str
-    input_text: str
+    input_text: Optional[str] = None
+    input_path: Optional[str] = None
 
 
 class BuildIndexRequest(BaseModel):
@@ -112,6 +121,11 @@ class TalkRequest(BaseModel):
     path: str
     query: str
     top_k: int = 3
+
+
+class AgentRequest(BaseModel):
+    query: str
+    history: list[dict] = []
 
 
 class RegisterRequest(BaseModel):
@@ -159,6 +173,22 @@ def update_embedder_config(data: EmbedderConfigUpdate):
             base_url=data.base_url,
         )
         return {"status": "success", "config": config.show()["embedder"]}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@app.post("/api/config/agent")
+def update_agent_config(data: AgentConfigUpdate):
+    """Update Agent configuration."""
+    try:
+        config = ConfigManager()
+        config.set_agent(
+            provider=data.provider,
+            model=data.model,
+            api_key=data.api_key,
+            base_url=data.base_url,
+        )
+        return {"status": "success", "config": config.show()["agent"]}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
 
@@ -365,9 +395,41 @@ def get_ka_data(path: str = Query(..., description="Absolute path of KA")):
 # ==================== Async Task Execution Runner ====================
 
 
+def extract_text_from_input(
+    input_text: Optional[str], input_path: Optional[str]
+) -> str:
+    """Resolve text from either direct string input or a file/directory path."""
+    if input_text:
+        return input_text
+    if not input_path:
+        raise ValueError("Either input_text or input_path must be provided.")
+
+    path = Path(input_path)
+    if not path.exists():
+        raise ValueError(f"Path does not exist: {input_path}")
+
+    if path.is_dir():
+        text_files = (
+            list(path.glob("*.txt"))
+            + list(path.glob("*.md"))
+            + list(path.glob("*.pdf"))
+        )
+        if not text_files:
+            raise ValueError(
+                f"No .txt, .md, or .pdf files found in directory: {input_path}"
+            )
+        all_text = []
+        for file_path in text_files:
+            all_text.append(read_input(str(file_path)))
+        return "\n\n".join(all_text)
+    else:
+        return read_input(str(path))
+
+
 def run_async_extraction(
     task_id: str,
-    input_text: str,
+    input_text: Optional[str],
+    input_path: Optional[str],
     output_path: str,
     template: str,
     lang: str,
@@ -398,15 +460,28 @@ def run_async_extraction(
         ka = Template.create(template, lang)
         task["logs"].append(f"Template '{template}' instance created successfully.")
 
+        # Step 2.5: Resolve input text
+        task["progress"] = "Reading input data..."
+        task["logs"].append("Resolving input text from path or provided string...")
+        resolved_text = extract_text_from_input(input_text, input_path)
+
         # Step 3: Parse Document
         task["progress"] = "Extracting knowledge from text..."
         task["logs"].append(
-            f"[3/4] Running extraction engine on input ({len(input_text)} characters)..."
+            f"[3/4] Running extraction engine on input ({len(resolved_text)} characters)..."
         )
         task["logs"].append("Invoking LLM batch parser...")
 
         # Run extraction
-        ka.feed_text(input_text)
+        def handle_progress(completed, total):
+            task["progress"] = f"Extracting chunk {completed} of {total}..."
+            task["logs"].append(f"Processed chunk {completed}/{total}")
+            try:
+                task["partial_data"] = ka.data.model_dump()
+            except Exception:
+                pass
+
+        ka.feed_text(resolved_text, on_progress=handle_progress)
         task["logs"].append("Knowledge extracted successfully.")
 
         # Save to output folder
@@ -449,7 +524,9 @@ def run_async_extraction(
         task["logs"].append(f"ERROR: {str(e)}")
 
 
-def run_async_feed(task_id: str, path_str: str, input_text: str) -> None:
+def run_async_feed(
+    task_id: str, path_str: str, input_text: Optional[str], input_path: Optional[str]
+) -> None:
     """Task runner to append text to existing KA."""
     task = tasks_registry[task_id]
     try:
@@ -463,11 +540,23 @@ def run_async_feed(task_id: str, path_str: str, input_text: str) -> None:
         ka.load(path)
         task["logs"].append("Existing knowledge loaded.")
 
+        task["progress"] = "Reading input data..."
+        resolved_text = extract_text_from_input(input_text, input_path)
+
         task["progress"] = "Extracting and merging new knowledge..."
         task["logs"].append(
-            f"[2/3] Extracting and merging new document ({len(input_text)} chars)..."
+            f"[2/3] Extracting and merging new document ({len(resolved_text)} chars)..."
         )
-        ka.feed_text(input_text)
+
+        def handle_feed_progress(completed, total):
+            task["progress"] = f"Extracting chunk {completed} of {total}..."
+            task["logs"].append(f"Processed chunk {completed}/{total}")
+            try:
+                task["partial_data"] = ka.data.model_dump()
+            except Exception:
+                pass
+
+        ka.feed_text(resolved_text, on_progress=handle_feed_progress)
         ka.dump(path)
         task["logs"].append("New knowledge merged and saved.")
 
@@ -531,6 +620,12 @@ def run_async_build_index(task_id: str, path_str: str, force: bool) -> None:
 @app.post("/api/ka/parse")
 def start_parse_task(req: ParseRequest):
     """Start extraction process in background."""
+    if not req.input_text and not req.input_path:
+        raise HTTPException(
+            status_code=400,
+            detail="Either input_text or input_path must be provided.",
+        )
+
     # Safety checks
     out_dir = Path(req.output_path)
     if out_dir.exists() and any(out_dir.iterdir()) and not req.force:
@@ -549,6 +644,7 @@ def start_parse_task(req: ParseRequest):
         "started_at": datetime.now().isoformat(),
         "completed_at": None,
         "output_path": req.output_path,
+        "template": req.template,
     }
 
     # Start thread
@@ -557,6 +653,7 @@ def start_parse_task(req: ParseRequest):
         args=(
             task_id,
             req.input_text,
+            req.input_path,
             req.output_path,
             req.template,
             req.language,
@@ -572,6 +669,12 @@ def start_parse_task(req: ParseRequest):
 @app.post("/api/ka/feed")
 def start_feed_task(req: FeedRequest):
     """Start feeding new documents to existing KA in background."""
+    if not req.input_text and not req.input_path:
+        raise HTTPException(
+            status_code=400,
+            detail="Either input_text or input_path must be provided.",
+        )
+
     path = Path(req.path)
     if not path.exists():
         raise HTTPException(status_code=404, detail="Path does not exist")
@@ -589,7 +692,7 @@ def start_feed_task(req: FeedRequest):
     }
 
     thread = threading.Thread(
-        target=run_async_feed, args=(task_id, req.path, req.input_text)
+        target=run_async_feed, args=(task_id, req.path, req.input_text, req.input_path)
     )
     thread.daemon = True
     thread.start()
@@ -729,6 +832,38 @@ def talk_ka(req: TalkRequest):
             "retrieved_edges": serialized_edges,
             "retrieved_items": serialized_items,
         }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@app.post("/api/agent/talk")
+def talk_agent(req: AgentRequest):
+    """Run Agent chat."""
+    try:
+        from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+
+        from hyperextract.utils.client import get_agent_client
+
+        agent_client = get_agent_client()
+        if not agent_client:
+            raise HTTPException(status_code=400, detail="Agent is not configured.")
+
+        messages = [
+            SystemMessage(
+                content="You are the Hyper-Extract Autonomous Agent. You help the user orchestrate knowledge extraction tasks and interact with the data."
+            )
+        ]
+        for msg in req.history:
+            if msg["role"] == "user":
+                messages.append(HumanMessage(content=msg["content"]))
+            elif msg["role"] == "assistant":
+                messages.append(AIMessage(content=msg["content"]))
+
+        messages.append(HumanMessage(content=req.query))
+
+        response = agent_client.invoke(messages)
+
+        return {"answer": response.content}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
 

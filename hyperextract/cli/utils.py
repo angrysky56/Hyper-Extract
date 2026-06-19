@@ -1,9 +1,10 @@
 """Common utilities for Hyper-Extract CLI."""
 
 import sys
-import typer
 from pathlib import Path
 from typing import Tuple
+
+import typer
 from rich.console import Console
 
 from .config import ConfigManager
@@ -11,26 +12,42 @@ from .config import ConfigManager
 console = Console()
 
 LOGO = r"""
-                                                                                     
-▄▄▄   ▄▄▄                                ▄▄▄▄▄▄▄                                     
-███   ███                               ███▀▀▀▀▀        ██                      ██   
-█████████ ██ ██ ████▄ ▄█▀█▄ ████▄       ███▄▄    ██ ██ ▀██▀▀ ████▄  ▀▀█▄ ▄████ ▀██▀▀ 
-███▀▀▀███ ██▄██ ██ ██ ██▄█▀ ██ ▀▀ ▀▀▀▀▀ ███       ███   ██   ██ ▀▀ ▄█▀██ ██     ██   
-███   ███  ▀██▀ ████▀ ▀█▄▄▄ ██          ▀███████ ██ ██  ██   ██    ▀█▄██ ▀████  ██   
-            ██  ██                                                                   
-          ▀▀▀   ▀▀                                                                   
+
+▄▄▄   ▄▄▄                                ▄▄▄▄▄▄▄
+███   ███                               ███▀▀▀▀▀        ██                      ██
+█████████ ██ ██ ████▄ ▄█▀█▄ ████▄       ███▄▄    ██ ██ ▀██▀▀ ████▄  ▀▀█▄ ▄████ ▀██▀▀
+███▀▀▀███ ██▄██ ██ ██ ██▄█▀ ██ ▀▀ ▀▀▀▀▀ ███       ███   ██   ██ ▀▀ ▄█▀██ ██     ██
+███   ███  ▀██▀ ████▀ ▀█▄▄▄ ██          ▀███████ ██ ██  ██   ██    ▀█▄██ ▀████  ██
+            ██  ██
+          ▀▀▀   ▀▀
 """
 
 
 def read_input(input_path: str) -> str:
-    """Read input from file or stdin."""
+    """Read input from file, stdin, or pdf."""
     if input_path == "-":
         return sys.stdin.read()
     path = Path(input_path)
     if not path.exists():
         raise FileNotFoundError(f"Input file not found: {input_path}")
-    with open(path, "r", encoding="utf-8") as f:
-        return f.read()
+
+    if path.suffix.lower() == ".pdf":
+        try:
+            import pypdf
+
+            reader = pypdf.PdfReader(path)
+            text = []
+            for page in reader.pages:
+                text.append(page.extract_text() or "")
+            return "\n".join(text)
+        except ImportError:
+            raise ImportError("pypdf is required to read PDF files.") from None
+
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return f.read()
+    except UnicodeDecodeError:
+        raise ValueError(f"Could not decode file {input_path} as UTF-8 text.") from None
 
 
 def validate_ka_path(ka_path: str) -> Path:
@@ -116,8 +133,9 @@ def get_template_from_ka(ka_path: Path) -> Tuple[str, str]:
     Raises:
         ValueError: If template not found and no local yaml file exists
     """
-    from .config import load_ka_metadata
     from hyperextract.utils.template_engine import Gallery
+
+    from .config import load_ka_metadata
 
     metadata = load_ka_metadata(ka_path)
     if metadata is None:

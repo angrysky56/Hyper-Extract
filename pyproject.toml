@@ -45,6 +45,7 @@ dependencies = [
     "fastapi>=0.110.0",
     "uvicorn>=0.28.0",
     "python-multipart>=0.0.9",
+    "pypdf>=5.1.0",
 ]
 
 [dependency-groups]
