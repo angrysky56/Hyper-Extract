@@ -565,7 +565,7 @@ def run_async_feed(
             task["chunks_total"] = total
             task["phase"] = phase
             task["progress"] = f"Extracting chunk {completed} of {total}..."
-            task["logs"].append(f"Processed chunk {completed}/{total}")
+            task["logs"].append(f"[{phase}] Processed chunk {completed}/{total}")
             try:
                 task["partial_data"] = ka.data.model_dump()
             except Exception:
