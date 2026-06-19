@@ -65,7 +65,7 @@ def save_history(paths: List[str]) -> None:
 
 
 # In-memory Task State Registry
-# task_id -> { "status": "running" | "success" | "failed", "progress": str, "logs": List[str], "started_at": str, "completed_at": str }
+# task_id -> { "status", "progress", "phase", "chunks_completed", "chunks_total", "logs", "started_at", "completed_at" }
 tasks_registry: Dict[str, Dict[str, Any]] = {}
 
 
@@ -447,6 +447,7 @@ def run_async_extraction(
 
     try:
         # Step 1: Validate LLM configuration
+        task["phase"] = "config"
         task["progress"] = "Validating configuration..."
         task["logs"].append("[1/4] Validating LLM and Embedder configuration...")
         config = ConfigManager()
@@ -455,17 +456,20 @@ def run_async_extraction(
             raise ValueError(msg)
 
         # Step 2: Initialize Template
+        task["phase"] = "init"
         task["progress"] = "Initializing Template..."
         task["logs"].append(f"[2/4] Resolving template '{template}' (lang={lang})...")
         ka = Template.create(template, lang)
         task["logs"].append(f"Template '{template}' instance created successfully.")
 
         # Step 2.5: Resolve input text
+        task["phase"] = "reading"
         task["progress"] = "Reading input data..."
         task["logs"].append("Resolving input text from path or provided string...")
         resolved_text = extract_text_from_input(input_text, input_path)
 
         # Step 3: Parse Document
+        task["phase"] = "extracting"
         task["progress"] = "Extracting knowledge from text..."
         task["logs"].append(
             f"[3/4] Running extraction engine on input ({len(resolved_text)} characters)..."
@@ -473,7 +477,10 @@ def run_async_extraction(
         task["logs"].append("Invoking LLM batch parser...")
 
         # Run extraction
-        def handle_progress(completed, total):
+        def handle_progress(completed, total, phase="extracting"):
+            task["chunks_completed"] = completed
+            task["chunks_total"] = total
+            task["phase"] = phase
             task["progress"] = f"Extracting chunk {completed} of {total}..."
             task["logs"].append(f"Processed chunk {completed}/{total}")
             try:
@@ -493,6 +500,7 @@ def run_async_extraction(
 
         # Step 4: Build Search Index
         if not no_index:
+            task["phase"] = "indexing"
             task["progress"] = "Building vector search index..."
             task["logs"].append(
                 "[4/4] Generating vector embeddings for search index..."
@@ -505,6 +513,7 @@ def run_async_extraction(
 
         # Complete Task
         task["status"] = "success"
+        task["phase"] = "done"
         task["progress"] = "Completed successfully"
         task["completed_at"] = datetime.now().isoformat()
         task["logs"].append("Extraction task finished successfully!")
@@ -530,6 +539,7 @@ def run_async_feed(
     """Task runner to append text to existing KA."""
     task = tasks_registry[task_id]
     try:
+        task["phase"] = "loading"
         task["progress"] = "Loading Knowledge Abstract..."
         task["logs"].append("[1/3] Loading existing Knowledge Abstract...")
 
@@ -540,15 +550,20 @@ def run_async_feed(
         ka.load(path)
         task["logs"].append("Existing knowledge loaded.")
 
+        task["phase"] = "reading"
         task["progress"] = "Reading input data..."
         resolved_text = extract_text_from_input(input_text, input_path)
 
+        task["phase"] = "extracting"
         task["progress"] = "Extracting and merging new knowledge..."
         task["logs"].append(
             f"[2/3] Extracting and merging new document ({len(resolved_text)} chars)..."
         )
 
-        def handle_feed_progress(completed, total):
+        def handle_feed_progress(completed, total, phase="extracting"):
+            task["chunks_completed"] = completed
+            task["chunks_total"] = total
+            task["phase"] = phase
             task["progress"] = f"Extracting chunk {completed} of {total}..."
             task["logs"].append(f"Processed chunk {completed}/{total}")
             try:
@@ -560,6 +575,7 @@ def run_async_feed(
         ka.dump(path)
         task["logs"].append("New knowledge merged and saved.")
 
+        task["phase"] = "indexing"
         task["progress"] = "Rebuilding search index..."
         task["logs"].append("[3/3] Rebuilding vector index for search...")
         ka.clear_index()
@@ -568,6 +584,7 @@ def run_async_feed(
         task["logs"].append("Search index rebuilt and saved.")
 
         task["status"] = "success"
+        task["phase"] = "done"
         task["progress"] = "Completed successfully"
         task["completed_at"] = datetime.now().isoformat()
         task["logs"].append("Append task finished successfully!")
@@ -640,6 +657,9 @@ def start_parse_task(req: ParseRequest):
         "type": "parse",
         "status": "running",
         "progress": "Starting...",
+        "phase": "init",
+        "chunks_completed": 0,
+        "chunks_total": 0,
         "logs": ["Task initialized."],
         "started_at": datetime.now().isoformat(),
         "completed_at": None,
@@ -685,6 +705,9 @@ def start_feed_task(req: FeedRequest):
         "type": "feed",
         "status": "running",
         "progress": "Starting append...",
+        "phase": "init",
+        "chunks_completed": 0,
+        "chunks_total": 0,
         "logs": ["Task initialized."],
         "started_at": datetime.now().isoformat(),
         "completed_at": None,
@@ -713,6 +736,9 @@ def start_build_index_task(req: BuildIndexRequest):
         "type": "build-index",
         "status": "running",
         "progress": "Starting index build...",
+        "phase": "indexing",
+        "chunks_completed": 0,
+        "chunks_total": 0,
         "logs": ["Task initialized."],
         "started_at": datetime.now().isoformat(),
         "completed_at": None,
@@ -730,10 +756,22 @@ def start_build_index_task(req: BuildIndexRequest):
 
 @app.get("/api/tasks/{task_id}")
 def get_task_status(task_id: str):
-    """Check background task status."""
+    """Check background task status with computed elapsed time."""
     if task_id not in tasks_registry:
         raise HTTPException(status_code=404, detail="Task not found")
-    return tasks_registry[task_id]
+    task = tasks_registry[task_id]
+    # Compute elapsed seconds dynamically for running tasks
+    if task["started_at"]:
+        started = datetime.fromisoformat(task["started_at"])
+        if task["status"] == "running":
+            elapsed = (datetime.now() - started).total_seconds()
+        elif task["completed_at"]:
+            completed = datetime.fromisoformat(task["completed_at"])
+            elapsed = (completed - started).total_seconds()
+        else:
+            elapsed = 0
+        task["elapsed_seconds"] = round(elapsed, 1)
+    return task
 
 
 # ==================== Search and Chat APIs ====================

@@ -66,7 +66,7 @@ if __name__ == "__main__":
     print(f"\nSummary: {data.summary}")
 
     if data.major_inventions:
-        print(f"\nMajor Inventions:")
+        print("\nMajor Inventions:")
         for inv in data.major_inventions[:3]:
             print(f"  - {inv}")
 

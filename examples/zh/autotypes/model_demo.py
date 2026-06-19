@@ -66,7 +66,7 @@ if __name__ == "__main__":
     print(f"\n摘要：{data.summary}")
 
     if data.major_works:
-        print(f"\n代表作品：")
+        print("\n代表作品：")
         for work in data.major_works[:3]:
             print(f"  - {work}")
 

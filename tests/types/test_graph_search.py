@@ -1,8 +1,6 @@
 """Unit tests for AutoGraph search functionality."""
 
-import pytest
 from pydantic import BaseModel, Field
-from typing import Optional, List
 
 from hyperextract.types import AutoGraph
 

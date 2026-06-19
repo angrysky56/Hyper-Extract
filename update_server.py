@@ -1,4 +1,3 @@
-import re
 
 with open("hyperextract/ui/server.py", "r") as f:
     content = f.read()

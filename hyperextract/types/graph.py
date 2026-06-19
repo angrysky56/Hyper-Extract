@@ -451,7 +451,7 @@ class AutoGraph(
     # ==================== Extraction Pipeline ====================
 
     def _extract_data(
-        self, text: str, _on_chunk_done: Any = None
+        self, text: str, on_chunk_done: Any = None
     ) -> AutoGraphSchema[NodeSchema, EdgeSchema]:
         """Main extraction logic dispatcher.
 
@@ -462,9 +462,9 @@ class AutoGraph(
             Extracted and validated graph.
         """
         if self.extraction_mode == "one_stage":
-            raw_graph = self._extract_data_by_one_stage(text)
+            raw_graph = self._extract_data_by_one_stage(text, on_chunk_done)
         elif self.extraction_mode == "two_stage":
-            raw_graph = self._extract_data_by_two_stage(text)
+            raw_graph = self._extract_data_by_two_stage(text, on_chunk_done)
         else:
             raise ValueError(f"Invalid extraction_mode: {self.extraction_mode}")
 
@@ -472,7 +472,7 @@ class AutoGraph(
         return self._prune_dangling_edges(raw_graph)
 
     def _extract_data_by_one_stage(
-        self, text: str
+        self, text: str, on_chunk_done: Any = None
     ) -> AutoGraphSchema[NodeSchema, EdgeSchema]:
         """Extract nodes and edges simultaneously using single LLM call.
 
@@ -495,9 +495,34 @@ class AutoGraph(
             logger.debug(
                 "stage=one_stage_batch_start max_concurrency=%d", self.max_workers
             )
-            graph_list = self.data_extractor.batch(
-                inputs, config={"max_concurrency": self.max_workers}
-            )
+            import concurrent.futures
+
+            graph_list = [None] * len(inputs)
+            completed_count = 0
+            with concurrent.futures.ThreadPoolExecutor(
+                max_workers=self.max_workers
+            ) as executor:
+                future_to_chunk = {
+                    executor.submit(self.data_extractor.invoke, inp): i
+                    for i, inp in enumerate(inputs)
+                }
+                for future in concurrent.futures.as_completed(future_to_chunk):
+                    i = future_to_chunk[future]
+                    completed_count += 1
+                    try:
+                        result = future.result()
+                        graph_list[i] = result
+                        if on_chunk_done:
+                            on_chunk_done(None, completed_count, len(chunks), "extracting")
+                    except Exception as exc:
+                        error_msg = str(exc)
+                        if len(error_msg) > 500:
+                            error_msg = error_msg[:500] + "... [truncated]"
+                        logger.error("Chunk extraction failed: %s", error_msg)
+                        graph_list[i] = None
+                        if on_chunk_done:
+                            on_chunk_done(None, completed_count, len(chunks), "extracting")
+
             graph_list = self._filter_none_results(
                 graph_list,
                 default_factory=lambda: self.graph_schema(nodes=[], edges=[]),
@@ -514,7 +539,7 @@ class AutoGraph(
         return result
 
     def _extract_data_by_two_stage(
-        self, text: str
+        self, text: str, on_chunk_done: Any = None
     ) -> AutoGraphSchema[NodeSchema, EdgeSchema]:
         """Extract nodes first, then edges with node context (batch processing).
 
@@ -542,7 +567,7 @@ class AutoGraph(
 
         # 2. Batch Extract Nodes (returns List[NodeListSchema])
         logger.debug("stage=two_stage_node_extraction_start")
-        chunk_node_lists = self._extract_nodes_batch(chunks)
+        chunk_node_lists = self._extract_nodes_batch(chunks, on_chunk_done)
         total_nodes = sum(len(nl.items) for nl in chunk_node_lists)
         logger.debug(
             "stage=two_stage_node_extraction_complete chunks=%d total_nodes=%d",
@@ -552,7 +577,7 @@ class AutoGraph(
 
         # 3. Batch Extract Edges (Context-aware, returns List[EdgeListSchema])
         logger.debug("stage=two_stage_edge_extraction_start")
-        chunk_edge_lists = self._extract_edges_batch(chunks, chunk_node_lists)
+        chunk_edge_lists = self._extract_edges_batch(chunks, chunk_node_lists, on_chunk_done)
         total_edges = sum(len(el.items) for el in chunk_edge_lists)
         logger.debug(
             "stage=two_stage_edge_extraction_complete chunks=%d total_edges=%d",
@@ -577,7 +602,7 @@ class AutoGraph(
         return result
 
     def _extract_nodes_batch(
-        self, chunks: List[str]
+        self, chunks: List[str], on_chunk_done: Any = None
     ) -> List[NodeListSchema[NodeSchema]]:
         """Batch extract nodes from multiple text chunks.
 
@@ -588,16 +613,40 @@ class AutoGraph(
             List of NodeListSchema objects with extracted nodes.
         """
         inputs = [{"source_text": chunk} for chunk in chunks]
-        results = self.node_extractor.batch(
-            inputs, config={"max_concurrency": self.max_workers}
-        )
+        import concurrent.futures
+
+        results = [None] * len(inputs)
+        completed_count = 0
+        with concurrent.futures.ThreadPoolExecutor(
+            max_workers=self.max_workers
+        ) as executor:
+            future_to_chunk = {
+                executor.submit(self.node_extractor.invoke, inp): i
+                for i, inp in enumerate(inputs)
+            }
+            for future in concurrent.futures.as_completed(future_to_chunk):
+                i = future_to_chunk[future]
+                completed_count += 1
+                try:
+                    result = future.result()
+                    results[i] = result
+                    if on_chunk_done:
+                        on_chunk_done(None, completed_count, len(chunks), "extracting nodes")
+                except Exception as exc:
+                    error_msg = str(exc)
+                    if len(error_msg) > 500:
+                        error_msg = error_msg[:500] + "... [truncated]"
+                    logger.error("Node chunk extraction failed: %s", error_msg)
+                    results[i] = None
+                    if on_chunk_done:
+                        on_chunk_done(None, completed_count, len(chunks), "extracting nodes")
         return self._filter_none_results(
             results,
             default_factory=lambda: self.node_list_schema(items=[]),
         )
 
     def _extract_edges_batch(
-        self, chunks: List[str], node_lists: List[NodeListSchema[NodeSchema]]
+        self, chunks: List[str], node_lists: List[NodeListSchema[NodeSchema]], on_chunk_done: Any = None
     ) -> List[EdgeListSchema[EdgeSchema]]:
         """Batch extract edges using corresponding node lists as context.
 
@@ -619,9 +668,33 @@ class AutoGraph(
 
             inputs.append({"source_text": chunk, "known_nodes": known_nodes})
 
-        results = self.edge_extractor.batch(
-            inputs, config={"max_concurrency": self.max_workers}
-        )
+        import concurrent.futures
+
+        results = [None] * len(inputs)
+        completed_count = 0
+        with concurrent.futures.ThreadPoolExecutor(
+            max_workers=self.max_workers
+        ) as executor:
+            future_to_chunk = {
+                executor.submit(self.edge_extractor.invoke, inp): i
+                for i, inp in enumerate(inputs)
+            }
+            for future in concurrent.futures.as_completed(future_to_chunk):
+                i = future_to_chunk[future]
+                completed_count += 1
+                try:
+                    result = future.result()
+                    results[i] = result
+                    if on_chunk_done:
+                        on_chunk_done(None, completed_count, len(chunks), "extracting edges")
+                except Exception as exc:
+                    error_msg = str(exc)
+                    if len(error_msg) > 500:
+                        error_msg = error_msg[:500] + "... [truncated]"
+                    logger.error("Edge chunk extraction failed: %s", error_msg)
+                    results[i] = None
+                    if on_chunk_done:
+                        on_chunk_done(None, completed_count, len(chunks), "extracting edges")
         return self._filter_none_results(
             results,
             default_factory=lambda: self.edge_list_schema(items=[]),

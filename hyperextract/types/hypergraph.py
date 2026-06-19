@@ -434,20 +434,20 @@ class AutoHypergraph(
     # ==================== Extraction Pipeline ====================
 
     def _extract_data(
-        self, text: str, _on_chunk_done: Any = None
+        self, text: str, on_chunk_done: Any = None
     ) -> AutoHypergraphSchema:
         """Main extraction logic dispatcher."""
         if self.extraction_mode == "two_stage":
-            raw_graph = self._extract_data_by_two_stage(text)
+            raw_graph = self._extract_data_by_two_stage(text, on_chunk_done)
         elif self.extraction_mode == "one_stage":
-            raw_graph = self._extract_data_by_one_stage(text)
+            raw_graph = self._extract_data_by_one_stage(text, on_chunk_done)
         else:
             raise ValueError(f"Invalid extraction_mode: {self.extraction_mode}")
 
         # Prune dangling hyperedges to ensure consistency
         return self._prune_dangling_edges(raw_graph)
 
-    def _extract_data_by_one_stage(self, text: str) -> AutoHypergraphSchema:
+    def _extract_data_by_one_stage(self, text: str, on_chunk_done: Any = None) -> AutoHypergraphSchema:
         """Extract nodes and edges simultaneously using single LLM call.
 
         Args:
@@ -463,9 +463,34 @@ class AutoHypergraph(
         else:
             chunks = self.text_splitter.split_text(text)
             inputs = [{"source_text": chunk} for chunk in chunks]
-            graph_list = self.data_extractor.batch(
-                inputs, config={"max_concurrency": self.max_workers}
-            )
+            import concurrent.futures
+
+            graph_list = [None] * len(inputs)
+            completed_count = 0
+            with concurrent.futures.ThreadPoolExecutor(
+                max_workers=self.max_workers
+            ) as executor:
+                future_to_chunk = {
+                    executor.submit(self.data_extractor.invoke, inp): i
+                    for i, inp in enumerate(inputs)
+                }
+                for future in concurrent.futures.as_completed(future_to_chunk):
+                    i = future_to_chunk[future]
+                    completed_count += 1
+                    try:
+                        result = future.result()
+                        graph_list[i] = result
+                        if on_chunk_done:
+                            on_chunk_done(None, completed_count, len(chunks), "extracting")
+                    except Exception as exc:
+                        error_msg = str(exc)
+                        if len(error_msg) > 500:
+                            error_msg = error_msg[:500] + "... [truncated]"
+                        logger.error("Chunk extraction failed: %s", error_msg)
+                        graph_list[i] = None
+                        if on_chunk_done:
+                            on_chunk_done(None, completed_count, len(chunks), "extracting")
+
             graph_list = self._filter_none_results(
                 graph_list,
                 default_factory=lambda: self.graph_schema(nodes=[], edges=[]),
@@ -474,7 +499,7 @@ class AutoHypergraph(
         # Merge multiple hypergraphs
         return self.merge_batch_data(graph_list)
 
-    def _extract_data_by_two_stage(self, text: str) -> AutoHypergraphSchema:
+    def _extract_data_by_two_stage(self, text: str, on_chunk_done: Any = None) -> AutoHypergraphSchema:
         """Extract nodes first, then hyperedges with node context (batch processing).
 
         Process:
@@ -493,10 +518,10 @@ class AutoHypergraph(
             logger.info(f"Extracting from {len(chunks)} chunks...")
 
         # 2. Batch Extract Nodes
-        chunk_node_lists = self._extract_nodes_batch(chunks)
+        chunk_node_lists = self._extract_nodes_batch(chunks, on_chunk_done)
 
         # 3. Batch Extract Hyperedges (Context-aware)
-        chunk_edge_lists = self._extract_edges_batch(chunks, chunk_node_lists)
+        chunk_edge_lists = self._extract_edges_batch(chunks, chunk_node_lists, on_chunk_done)
 
         # 4. Construct Partial Graphs (Tuple format for merge optimization)
         partial_hypergraphs = (
@@ -508,20 +533,45 @@ class AutoHypergraph(
         return self.merge_batch_data(partial_hypergraphs)
 
     def _extract_nodes_batch(
-        self, chunks: List[str]
+        self, chunks: List[str], on_chunk_done: Any = None
     ) -> List[NodeListSchema[NodeSchema]]:
         """Batch extract nodes from multiple text chunks."""
         inputs = [{"source_text": chunk} for chunk in chunks]
-        results = self.node_extractor.batch(
-            inputs, config={"max_concurrency": self.max_workers}
-        )
+        import concurrent.futures
+
+        results = [None] * len(inputs)
+        completed_count = 0
+        with concurrent.futures.ThreadPoolExecutor(
+            max_workers=self.max_workers
+        ) as executor:
+            future_to_chunk = {
+                executor.submit(self.node_extractor.invoke, inp): i
+                for i, inp in enumerate(inputs)
+            }
+            for future in concurrent.futures.as_completed(future_to_chunk):
+                i = future_to_chunk[future]
+                completed_count += 1
+                try:
+                    result = future.result()
+                    results[i] = result
+                    if on_chunk_done:
+                        on_chunk_done(None, completed_count, len(chunks), "extracting nodes")
+                except Exception as exc:
+                    error_msg = str(exc)
+                    if len(error_msg) > 500:
+                        error_msg = error_msg[:500] + "... [truncated]"
+                    logger.error("Node chunk extraction failed: %s", error_msg)
+                    results[i] = None
+                    if on_chunk_done:
+                        on_chunk_done(None, completed_count, len(chunks), "extracting nodes")
+
         return self._filter_none_results(
             results,
             default_factory=lambda: self.node_list_schema(items=[]),
         )
 
     def _extract_edges_batch(
-        self, chunks: List[str], node_lists: List[NodeListSchema[NodeSchema]]
+        self, chunks: List[str], node_lists: List[NodeListSchema[NodeSchema]], on_chunk_done: Any = None
     ) -> List[EdgeListSchema[EdgeSchema]]:
         """Batch extract hyperedges using corresponding node lists as context."""
         inputs = []
@@ -535,9 +585,34 @@ class AutoHypergraph(
 
             inputs.append({"source_text": chunk, "known_nodes": known_nodes})
 
-        results = self.edge_extractor.batch(
-            inputs, config={"max_concurrency": self.max_workers}
-        )
+        import concurrent.futures
+
+        results = [None] * len(inputs)
+        completed_count = 0
+        with concurrent.futures.ThreadPoolExecutor(
+            max_workers=self.max_workers
+        ) as executor:
+            future_to_chunk = {
+                executor.submit(self.edge_extractor.invoke, inp): i
+                for i, inp in enumerate(inputs)
+            }
+            for future in concurrent.futures.as_completed(future_to_chunk):
+                i = future_to_chunk[future]
+                completed_count += 1
+                try:
+                    result = future.result()
+                    results[i] = result
+                    if on_chunk_done:
+                        on_chunk_done(None, completed_count, len(chunks), "extracting edges")
+                except Exception as exc:
+                    error_msg = str(exc)
+                    if len(error_msg) > 500:
+                        error_msg = error_msg[:500] + "... [truncated]"
+                    logger.error("Edge chunk extraction failed: %s", error_msg)
+                    results[i] = None
+                    if on_chunk_done:
+                        on_chunk_done(None, completed_count, len(chunks), "extracting edges")
+
         return self._filter_none_results(
             results,
             default_factory=lambda: self.edge_list_schema(items=[]),

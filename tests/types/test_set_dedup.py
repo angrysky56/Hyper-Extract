@@ -1,12 +1,11 @@
 """Unit tests for AutoSet deduplication functionality."""
 
 import pytest
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 from typing import Optional
 from ontomem.merger import MergeStrategy
 
 from hyperextract.types import AutoSet
-from tests.fixtures import KeywordSchema
 
 
 class KeywordItemSchema(BaseModel):

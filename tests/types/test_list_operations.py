@@ -1,11 +1,10 @@
 """Unit tests for AutoList operations."""
 
 import pytest
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 from typing import Optional
 
 from hyperextract.types import AutoList
-from tests.fixtures import PersonSchema
 
 
 class PersonItemSchema(BaseModel):

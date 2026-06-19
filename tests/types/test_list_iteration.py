@@ -1,7 +1,7 @@
 """Unit tests for AutoList iteration and membership."""
 
 import pytest
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 from typing import Optional
 
 from hyperextract.types import AutoList
@@ -193,7 +193,6 @@ class TestAutoListOperators:
 
     def test_add_with_different_schema_raises(self, llm_client, embedder):
         """Test that adding lists with different schemas raises TypeError."""
-        from hyperextract.types import AutoModel
 
         list1 = AutoList(
             item_schema=PersonItemSchema,

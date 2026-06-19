@@ -7,8 +7,6 @@ import shutil
 from pathlib import Path
 
 import pytest
-from pydantic import BaseModel, Field
-from typing import Optional
 
 from hyperextract.types import AutoModel
 from tests.fixtures import PersonSchema

@@ -1071,11 +1071,17 @@ export default function App() {
                     style={{
                       padding: "16px 20px",
                       display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "center",
+                      flexDirection: "column",
+                      gap: "12px",
                     }}
                   >
-                    <div>
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                      }}
+                    >
                       <div
                         style={{
                           display: "flex",
@@ -1087,37 +1093,83 @@ export default function App() {
                           Task ID: {activeTask.id.substring(0, 8)}...
                         </span>
                         <span
-                          className={`badge ${activeTask.status === "running" ? "badge-primary spinner" : activeTask.status === "success" ? "badge-success" : "badge-danger"}`}
+                          className={`badge ${activeTask.status === "running" ? "badge-primary" : activeTask.status === "success" ? "badge-success" : "badge-danger"}`}
                         >
                           {activeTask.status}
                         </span>
+                        {activeTask.elapsed_seconds !== undefined && (
+                          <span
+                            style={{
+                              fontSize: "13px",
+                              color: "var(--text-muted)",
+                              marginLeft: "8px",
+                            }}
+                          >
+                            ⏱️ {Math.floor(activeTask.elapsed_seconds / 60)}:
+                            {(activeTask.elapsed_seconds % 60)
+                              .toString()
+                              .padStart(2, "0")}
+                          </span>
+                        )}
                       </div>
+                      {activeTask.status === "running" && (
+                        <div
+                          style={{ width: "24px", height: "24px" }}
+                          className="spinner"
+                        >
+                          <svg
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="3"
+                            style={{ color: "var(--primary)" }}
+                          >
+                            <path d="M21 12a9 9 0 0 1-9 9m9-9a9 9 0 0 0-9-9" />
+                          </svg>
+                        </div>
+                      )}
+                    </div>
+
+                    <div>
+                      {activeTask.phase && (
+                        <div className="progress-phase">
+                          <span style={{ textTransform: "capitalize" }}>
+                            {activeTask.phase.replace("_", " ")}
+                          </span>
+                          {activeTask.chunks_total !== undefined &&
+                            activeTask.chunks_total > 0 && (
+                              <span
+                                style={{
+                                  color: "var(--text-muted)",
+                                  fontWeight: "normal",
+                                }}
+                              >
+                                • Chunk {activeTask.chunks_completed} of{" "}
+                                {activeTask.chunks_total}
+                              </span>
+                            )}
+                        </div>
+                      )}
+
                       <div
-                        style={{
-                          fontSize: "13px",
-                          color: "var(--text-muted)",
-                          marginTop: "4px",
-                        }}
+                        style={{ fontSize: "13px", color: "var(--text-main)" }}
                       >
                         {activeTask.progress}
                       </div>
+
+                      {activeTask.status === "running" &&
+                        activeTask.chunks_total !== undefined &&
+                        activeTask.chunks_total > 0 && (
+                          <div className="progress-bar-track">
+                            <div
+                              className="progress-bar-fill"
+                              style={{
+                                width: `${Math.max(5, ((activeTask.chunks_completed || 0) / activeTask.chunks_total) * 100)}%`,
+                              }}
+                            />
+                          </div>
+                        )}
                     </div>
-                    {activeTask.status === "running" && (
-                      <div
-                        style={{ width: "40px", height: "40px" }}
-                        className="spinner"
-                      >
-                        <svg
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="3"
-                          style={{ color: "#00f0ff" }}
-                        >
-                          <path d="M21 12a9 9 0 0 1-9 9m9-9a9 9 0 0 0-9-9" />
-                        </svg>
-                      </div>
-                    )}
                   </div>
                   <LogConsole
                     logs={activeTask.logs}

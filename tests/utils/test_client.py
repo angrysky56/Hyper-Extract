@@ -1,8 +1,6 @@
 """Tests for client factory functions."""
 
-import os
 from pathlib import Path
-from typing import Any
 from unittest.mock import patch, MagicMock
 
 import pytest

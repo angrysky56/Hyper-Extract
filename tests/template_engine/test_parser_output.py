@@ -1,14 +1,6 @@
 """Unit tests for template parsers - output."""
 
-import pytest
-import tempfile
-import yaml
-from pathlib import Path
-from pydantic import BaseModel
 
-from hyperextract.utils.template_engine.parsers import (
-    load_template,
-)
 
 
 class TestParseOutputBasic:

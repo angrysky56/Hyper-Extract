@@ -1,7 +1,6 @@
 """Unit tests for AutoSet set operations."""
 
-import pytest
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 from typing import Optional
 from ontomem.merger import MergeStrategy
 

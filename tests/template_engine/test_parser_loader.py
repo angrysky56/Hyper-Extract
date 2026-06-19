@@ -1,9 +1,6 @@
 """Unit tests for template parsers - loader."""
 
 import pytest
-import tempfile
-import yaml
-from pathlib import Path
 
 from hyperextract.utils.template_engine.parsers import (
     load_template,

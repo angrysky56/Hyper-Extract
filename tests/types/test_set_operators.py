@@ -2,8 +2,7 @@
 
 from typing import Optional
 
-import pytest
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 from hyperextract.types import AutoSet
 

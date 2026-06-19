@@ -202,7 +202,7 @@ class iText2KG_Star(AutoGraph[NodeSchema, EdgeSchema]):
 
     # ==================== Extraction Pipeline ====================
 
-    def _extract_data(self, text: str, _on_chunk_done=None) -> AutoGraphSchema:
+    def _extract_data(self, text: str, on_chunk_done=None) -> AutoGraphSchema:
         """Extract edges directly, then derive nodes (One-stage extraction).
 
         Process:
@@ -226,9 +226,33 @@ class iText2KG_Star(AutoGraph[NodeSchema, EdgeSchema]):
 
         # 2. Batch Extract Edges directly
         inputs = [{"source_text": chunk} for chunk in chunks]
-        chunk_edge_lists = self.edge_extractor.batch(
-            inputs, config={"max_concurrency": self.max_workers}
-        )
+        import concurrent.futures
+
+        chunk_edge_lists = [None] * len(inputs)
+        completed_count = 0
+        with concurrent.futures.ThreadPoolExecutor(
+            max_workers=self.max_workers
+        ) as executor:
+            future_to_chunk = {
+                executor.submit(self.edge_extractor.invoke, inp): i
+                for i, inp in enumerate(inputs)
+            }
+            for future in concurrent.futures.as_completed(future_to_chunk):
+                i = future_to_chunk[future]
+                completed_count += 1
+                try:
+                    result = future.result()
+                    chunk_edge_lists[i] = result
+                    if on_chunk_done:
+                        on_chunk_done(None, completed_count, len(chunks), "extracting edges")
+                except Exception as exc:
+                    error_msg = str(exc)
+                    if len(error_msg) > 500:
+                        error_msg = error_msg[:500] + "... [truncated]"
+                    logger.error("Edge chunk extraction failed: %s", error_msg)
+                    chunk_edge_lists[i] = None
+                    if on_chunk_done:
+                        on_chunk_done(None, completed_count, len(chunks), "extracting edges")
 
         # 3. Post-process: Derive Nodes & Set Observation Date
         all_nodes_lists, all_edges_lists = [], []

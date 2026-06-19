@@ -6,12 +6,12 @@
   --bg-sidebar: #0f121a;
   --bg-card: rgba(18, 23, 33, 0.65);
   --bg-card-hover: rgba(25, 32, 47, 0.85);
-  
+
   --primary: #00f0ff;
   --primary-rgb: 0, 240, 255;
   --primary-hover: #00b8d4;
   --primary-glow: rgba(0, 240, 255, 0.15);
-  
+
   --secondary: #9d4edd;
   --secondary-rgb: 157, 78, 221;
   --secondary-glow: rgba(157, 78, 221, 0.15);
@@ -19,10 +19,10 @@
   --text-main: #f3f4f6;
   --text-muted: #9ca3af;
   --text-dark: #6b7280;
-  
+
   --border-color: rgba(255, 255, 255, 0.08);
   --border-active: rgba(0, 240, 255, 0.4);
-  
+
   /* Status Colors */
   --success: #10b981;
   --success-glow: rgba(16, 185, 129, 0.15);
@@ -32,7 +32,7 @@
   --danger-glow: rgba(239, 68, 68, 0.15);
   --info: #3b82f6;
   --info-glow: rgba(59, 130, 246, 0.15);
-  
+
   /* Shadows and Borders */
   --glass-border: 1px solid rgba(255, 255, 255, 0.08);
   --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5);
@@ -40,7 +40,7 @@
   --radius-sm: 6px;
   --radius-md: 12px;
   --radius-lg: 20px;
-  
+
   /* Transitions */
   --transition-fast: 0.15s ease;
   --transition-normal: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
@@ -239,6 +239,7 @@ input::placeholder, textarea::placeholder {
   font-weight: 700;
   background: linear-gradient(to right, #ffffff, var(--primary));
   -webkit-background-clip: text;
+  background-clip: text;
   -webkit-text-fill-color: transparent;
 }
 
@@ -335,4 +336,34 @@ input::placeholder, textarea::placeholder {
 
 .spinner {
   animation: spin 1s linear infinite;
+}
+
+/* Progress Bar */
+.progress-bar-track {
+  width: 100%;
+  height: 8px;
+  background: rgba(0, 0, 0, 0.4);
+  border-radius: 4px;
+  overflow: hidden;
+  margin-top: 12px;
+  margin-bottom: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.progress-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--primary), #00b8d4);
+  border-radius: 4px;
+  transition: width 0.3s ease;
+  box-shadow: 0 0 10px rgba(0, 240, 255, 0.5);
+}
+
+.progress-phase {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--primary);
+  margin-bottom: 4px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }

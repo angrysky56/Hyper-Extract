@@ -38,6 +38,10 @@ export interface TaskRecord {
   type: 'parse' | 'feed' | 'build-index';
   status: 'running' | 'success' | 'failed';
   progress: string;
+  phase?: string;
+  chunks_completed?: number;
+  chunks_total?: number;
+  elapsed_seconds?: number;
   logs: string[];
   started_at: string;
   completed_at: string | null;

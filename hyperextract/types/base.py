@@ -279,7 +279,8 @@ class BaseAutoType(ABC, Generic[T]):
                 len(inputs),
             )
 
-            extracted_data_list = []
+            extracted_data_list = [None] * len(inputs)
+            completed_count = 0
             import concurrent.futures
 
             with concurrent.futures.ThreadPoolExecutor(
@@ -291,16 +292,20 @@ class BaseAutoType(ABC, Generic[T]):
                 }
                 for future in concurrent.futures.as_completed(future_to_chunk):
                     i = future_to_chunk[future]
+                    completed_count += 1
                     try:
                         result = future.result()
-                        extracted_data_list.append(result)
+                        extracted_data_list[i] = result
                         if on_chunk_done:
-                            on_chunk_done(result, len(extracted_data_list), len(chunks))
+                            on_chunk_done(result, completed_count, len(chunks))
                     except Exception as exc:
-                        logger.error("Chunk %d extraction failed: %s", i, exc)
-                        extracted_data_list.append(None)
+                        error_msg = str(exc)
+                        if len(error_msg) > 500:
+                            error_msg = error_msg[:500] + "... [truncated]"
+                        logger.error("Chunk %d extraction failed: %s", i, error_msg)
+                        extracted_data_list[i] = None
                         if on_chunk_done:
-                            on_chunk_done(None, len(extracted_data_list), len(chunks))
+                            on_chunk_done(None, completed_count, len(chunks))
 
             logger.debug(
                 "stage=llm_batch_complete results=%d", len(extracted_data_list)
@@ -413,13 +418,19 @@ class BaseAutoType(ABC, Generic[T]):
 
         chunk_done_called = False
 
-        def handle_chunk(partial_result, completed, total):
+        def handle_chunk(partial_result, completed, total, phase="extracting"):
             nonlocal chunk_done_called
             chunk_done_called = True
             if partial_result is not None:
                 self._update_data_state(partial_result)
             if on_progress:
-                on_progress(completed, total)
+                # Some implementations expect 3 args (phase included)
+                import inspect
+                sig = inspect.signature(on_progress)
+                if "phase" in sig.parameters or len(sig.parameters) >= 3:
+                    on_progress(completed, total, phase)
+                else:
+                    on_progress(completed, total)
 
         import inspect
 
@@ -435,7 +446,12 @@ class BaseAutoType(ABC, Generic[T]):
             if not chunk_done_called:
                 self._update_data_state(extracted_data)
                 if on_progress:
-                    on_progress(1, 1)
+                    import inspect
+                    sig = inspect.signature(on_progress)
+                    if "phase" in sig.parameters or len(sig.parameters) >= 3:
+                        on_progress(1, 1, "extracting")
+                    else:
+                        on_progress(1, 1)
         else:
             if has_on_chunk_done:
                 extracted_data = self._extract_data(text, on_chunk_done=handle_chunk)
@@ -445,7 +461,12 @@ class BaseAutoType(ABC, Generic[T]):
             if not chunk_done_called:
                 self._update_data_state(extracted_data)
                 if on_progress:
-                    on_progress(1, 1)
+                    import inspect
+                    sig = inspect.signature(on_progress)
+                    if "phase" in sig.parameters or len(sig.parameters) >= 3:
+                        on_progress(1, 1, "extracting")
+                    else:
+                        on_progress(1, 1)
 
         logger.debug("stage=extract_done")
 

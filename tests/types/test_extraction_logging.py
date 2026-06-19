@@ -3,7 +3,6 @@
 import logging
 from unittest.mock import MagicMock
 
-import pytest
 from pydantic import BaseModel, Field
 
 from hyperextract.types.base import BaseAutoType

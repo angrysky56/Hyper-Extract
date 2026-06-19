@@ -1,6 +1,5 @@
 """Unit tests for the Hyper-Extract Web UI API."""
 
-import pytest
 from fastapi.testclient import TestClient
 
 from hyperextract.ui.server import app

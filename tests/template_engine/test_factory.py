@@ -1,7 +1,6 @@
 """Unit tests for TemplateFactory."""
 
 import pytest
-from pathlib import Path
 
 from hyperextract.utils.template_engine import TemplateFactory, Gallery
 

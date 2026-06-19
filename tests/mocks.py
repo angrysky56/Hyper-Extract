@@ -1,8 +1,8 @@
 """Mock implementations for LLM and Embeddings for testing without API keys."""
 
-from typing import Any, List, Optional, Type, Union, get_origin, get_args, Dict
+from typing import Any, List, Optional, Type, Union, get_origin, get_args
 from enum import Enum
-from pydantic import BaseModel, create_model
+from pydantic import BaseModel
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import BaseMessage, AIMessage
 from langchain_core.embeddings import Embeddings
